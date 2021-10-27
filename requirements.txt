@@ -1,0 +1,6 @@
+tk
+pillow
+torch
+torchvision
+torch_optimizer
+-e git+https://github.com/openai/clip.git#egg=clip
