@@ -18,13 +18,12 @@ class VisionGUI:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.info('Starting VisionGUI')
         self.window = tk.Tk()
+        self.window.configure(bg='#222222')
         self.window.title("Vision GUI")
         try:
             self.window.attributes('-type', 'dialog')
         except:
             pass
-        self.window.configure(background='#555555')
-
         self.backend = FourierVisions
         self.model = None
         self.model_done = True
@@ -53,14 +52,14 @@ class VisionGUI:
 
 class ImageViewer(tk.Frame):
     def __init__(self, source_window):
-        tk.Frame.__init__(self, source_window.window, bg='#444444')
+        tk.Frame.__init__(self, source_window.window, bg='#222222')
         self.source_window = source_window
         self.path = 'placeholder.jpg'
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
         self.img = ImageTk.PhotoImage(Image.open('placeholder.jpg'))
-        self.tkimg = tk.Label(self, image = self.img, borderwidth=0, highlightthickness=0)
+        self.tkimg = tk.Label(self, image = self.img, borderwidth=0, highlightthickness=0, fg='#dddddd')
         self.tkimg.photo = self.img
         self.tkimg.pack()
 
@@ -91,8 +90,8 @@ class PromptBar(tk.Frame):
         self.logger = logging.getLogger(self.__class__.__name__)
 
         #self.browse = Button(self, text="AI Art", font='Arial 12 bold', bg='#55dd00', borderwidth=0, highlightthickness=0, command=self.toggle_art)
-        self.text_entry = Entry(self, font='Arial 12 bold', borderwidth=0, highlightthickness=0, insertbackground='#dddddd', bg='#666666', justify='center')
-        self.button = Button(self, text="GO", font='Arial 12 bold', borderwidth=0, highlightthickness=0, command=self.start_generation)
+        self.text_entry = Entry(self, font='Arial 12 bold', borderwidth=0, highlightthickness=0, insertbackground='#dddddd', fg='#dddddd', bg='#666666', justify='center')
+        self.button = Button(self, text="GO", font='Arial 12 bold', borderwidth=0, highlightthickness=0, command=self.start_generation, fg='#dddddd')
         self.set_ready()
 
         self.button.pack(side='right')
@@ -207,7 +206,7 @@ class SettingsPanel(tk.Frame):
                 [
                     ('PyramidVisions', PiramidVisions),
                     ('FourierVisions', FourierVisions),
-                    ('CLIPCPPN', CLIPCPPN)
+                    ('CLIP+CPPN', CLIPCPPN)
                 ]
             )
         ]
@@ -227,10 +226,11 @@ class SeedControl(tk.Frame):
         tk.Frame.__init__(self, frame, bg='#222222')
         self.is_random = True
 
-        self.name_label = Label(self, text='Seed', width=12, font='Arial 12', bg='#222222')
+        self.name_label = Label(self, text='Seed', width=12, font='Arial 12', bg='#222222', fg='#dddddd')
         self.random_seed = Button(
             self, text='Random',
             font='Arial 12',
+            fg='#dddddd',
             borderwidth=0,
             highlightthickness=0,
             command=lambda x=True: self.set_seed(x)
@@ -238,11 +238,12 @@ class SeedControl(tk.Frame):
         self.fixed_seed = Button(
             self, text='Fixed',
             font='Arial 12',
+            fg='#dddddd',
             borderwidth=0,
             highlightthickness=0,
             command=lambda x=False: self.set_seed(x)
         )
-        self.seed_entry = Entry(self, font='Arial 12', borderwidth=0, highlightthickness=0, insertbackground='#dddddd', bg='#444444', justify='right')
+        self.seed_entry = Entry(self, font='Arial 12', borderwidth=0, highlightthickness=0, insertbackground='#dddddd', fg='#dddddd', bg='#444444', justify='right')
 
         self.name_label.pack(side='left')
         self.random_seed.pack(side='left')
@@ -275,11 +276,11 @@ class Slider(tk.Frame):
 
         self.var_name = var_name
 
-        self.name_label = Label(self, text=show_name, width=12, font='Arial 12', bg='#222222', justify='left')
-        self.start_label = Label(self, text=str(start), font='Arial 8', bg='#222222', width=5)
-        self.slider = Scale(self, from_=start, to=end, resolution=steps, orient='horizontal', borderwidth=0, highlightthickness=0, bg='#222222')
+        self.name_label = Label(self, text=show_name, width=12, font='Arial 12', bg='#222222', fg='#dddddd', justify='left')
+        self.start_label = Label(self, text=str(start), font='Arial 8', bg='#222222', fg='#dddddd', width=5)
+        self.slider = Scale(self, from_=start, to=end, resolution=steps, orient='horizontal', borderwidth=0, highlightthickness=0, bg='#222222', fg='#dddddd')
         self.slider.set(default if default is not None else start)
-        self.end_label = Label(self, text=str(end), font='Arial 8', bg='#222222', width=5)
+        self.end_label = Label(self, text=str(end), font='Arial 8', bg='#222222', fg='#dddddd', width=5)
 
         self.name_label.pack(side='left')
         self.start_label.pack(side='left')
@@ -303,11 +304,12 @@ class Selector(tk.Frame):
 
         self.current_val = None
 
-        self.name_label = Label(self, text=show_name, width=12, font='Arial 12', bg='#222222')
+        self.name_label = Label(self, text=show_name, width=12, font='Arial 12', bg='#222222', fg='#dddddd')
         self.buttons = [
             Button(
                 self, text=self.show_names[button_id],
                 font='Arial 12',
+                fg='#dddddd',
                 borderwidth=0,
                 highlightthickness=0,
                 command=lambda x=button_id: self.select(x)
