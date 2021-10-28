@@ -50,7 +50,7 @@ class VisionGUI:
 
 class ImageViewer(tk.Frame):
     def __init__(self, source_window):
-        tk.Frame.__init__(self, source_window.window)
+        tk.Frame.__init__(self, source_window.window, bg='#444444')
         self.source_window = source_window
         self.path = 'placeholder.jpg'
 
@@ -82,18 +82,18 @@ class ImageViewer(tk.Frame):
 
 class PromptBar(tk.Frame):
     def __init__(self, source_window):
-        tk.Frame.__init__(self, source_window.window)
+        tk.Frame.__init__(self, source_window.window, bg='#222222')
         self.source_window = source_window
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
         #self.browse = Button(self, text="AI Art", font='Arial 12 bold', bg='#55dd00', borderwidth=0, highlightthickness=0, command=self.toggle_art)
-        self.text_entry = Entry(self, font='Arial 12 bold', borderwidth=0, highlightthickness=0, insertbackground='#dddddd')
+        self.text_entry = Entry(self, font='Arial 12 bold', borderwidth=0, highlightthickness=0, insertbackground='#dddddd', bg='#666666', justify='center')
         self.button = Button(self, text="GO", font='Arial 12 bold', borderwidth=0, highlightthickness=0, command=self.start_generation)
         self.set_ready()
 
         self.button.pack(side='right')
-        self.text_entry.pack(side='right', expand=True, fill='both', padx=10)
+        self.text_entry.pack(side='right', expand=True, fill='both', padx=5, pady=5)
         self.text_entry.grid_rowconfigure(0, weight=1)
         #self.browse.pack(side='right')
 
@@ -144,7 +144,7 @@ class PromptBar(tk.Frame):
 
 class ModelProgress(tk.Frame):
     def __init__(self, source_window):
-        tk.Frame.__init__(self, source_window.window, bg='#00ff00')
+        tk.Frame.__init__(self, source_window.window, bg='#222222')
         self.source_window = source_window
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -152,10 +152,10 @@ class ModelProgress(tk.Frame):
         self.stage_one = Progressbar(self, orient='horizontal', mode='determinate')
         self.stage_two = Progressbar(self, orient='horizontal', mode='determinate')
 
-        self.stage_one.pack(side='left', expand=True, fill='both')
+        self.stage_one.pack(side='left', expand=True, fill='both', pady=5)
         self.stage_one.grid_rowconfigure(0, weight=1)
 
-        self.stage_two.pack(side='left', expand=True, fill='both')
+        self.stage_two.pack(side='left', expand=True, fill='both', pady=5)
         self.stage_two.grid_rowconfigure(0, weight=1)
 
     def start(self, cycles_s1, cycles_s2):
@@ -184,7 +184,7 @@ class ModelProgress(tk.Frame):
 
 class SettingsPanel(tk.Frame):
     def __init__(self, source_window):
-        tk.Frame.__init__(self, source_window.window)
+        tk.Frame.__init__(self, source_window.window, bg='#222222')
         self.source_window = source_window
 
         self.options = [
@@ -220,10 +220,10 @@ class SettingsPanel(tk.Frame):
 
 class SeedControl(tk.Frame):
     def __init__(self, frame):
-        tk.Frame.__init__(self, frame)
+        tk.Frame.__init__(self, frame, bg='#222222')
         self.is_random = True
 
-        self.name_label = Label(self, text='Seed', width=15, font='Arial 12')
+        self.name_label = Label(self, text='Seed', width=12, font='Arial 12', bg='#222222')
         self.random_seed = Button(
             self, text='Random',
             bg='#7a52cc',
@@ -244,12 +244,12 @@ class SeedControl(tk.Frame):
             highlightthickness=0,
             command=lambda x=False: self.set_seed(x)
         )
-        self.seed_entry = Entry(self, font='Arial 12 bold', borderwidth=0, highlightthickness=0, insertbackground='#dddddd')
+        self.seed_entry = Entry(self, font='Arial 12', borderwidth=0, highlightthickness=0, insertbackground='#dddddd', bg='#444444', justify='right')
 
         self.name_label.pack(side='left')
         self.random_seed.pack(side='left')
         self.fixed_seed.pack(side='left')
-        self.seed_entry.pack(side='left', expand=True, fill='both', padx=10)
+        self.seed_entry.pack(side='left', expand=True, fill='both', padx=5, pady=5)
         self.seed_entry.grid_rowconfigure(0, weight=1)
 
     def set_seed(self, is_random):
@@ -269,17 +269,17 @@ class SeedControl(tk.Frame):
 
 class Slider(tk.Frame):
     def __init__(self, frame, show_name, var_name, start, end, steps=1, default=None):
-        tk.Frame.__init__(self, frame)
+        tk.Frame.__init__(self, frame, bg='#222222')
         self.start = start
         self.end = end
 
         self.var_name = var_name
 
-        self.name_label = Label(self, text=show_name, width=15, font='Arial 12')
-        self.start_label = Label(self, text=str(start), font='Arial 12')
-        self.slider = Scale(self, from_=start, to=end, resolution=steps, orient='horizontal', borderwidth=0, highlightthickness=0)
+        self.name_label = Label(self, text=show_name, width=12, font='Arial 12', bg='#222222', justify='left')
+        self.start_label = Label(self, text=str(start), font='Arial 8', bg='#222222', width=5)
+        self.slider = Scale(self, from_=start, to=end, resolution=steps, orient='horizontal', borderwidth=0, highlightthickness=0, bg='#222222')
         self.slider.set(default if default is not None else start)
-        self.end_label = Label(self, text=str(end), font='Arial 12')
+        self.end_label = Label(self, text=str(end), font='Arial 8', bg='#222222', width=5)
 
         self.name_label.pack(side='left')
         self.start_label.pack(side='left')
@@ -295,7 +295,7 @@ class Slider(tk.Frame):
 
 class Selector(tk.Frame):
     def __init__(self, frame, show_name, var_name, options, default=None):
-        tk.Frame.__init__(self, frame)
+        tk.Frame.__init__(self, frame, bg='#222222')
         self.var_name = var_name
 
         self.show_names = [ option[0] for option in options ]
@@ -303,7 +303,7 @@ class Selector(tk.Frame):
 
         self.current_val = None
 
-        self.name_label = Label(self, text=show_name, width=15, font='Arial 12')
+        self.name_label = Label(self, text=show_name, width=12, font='Arial 12', bg='#222222')
         self.buttons = [
             Button(
                 self, text=self.show_names[button_id],
