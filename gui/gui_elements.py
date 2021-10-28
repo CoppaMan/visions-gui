@@ -19,7 +19,10 @@ class VisionGUI:
         self.logger.info('Starting VisionGUI')
         self.window = tk.Tk()
         self.window.title("Vision GUI")
-        self.window.attributes('-type', 'dialog')
+        try:
+            self.window.attributes('-type', 'dialog')
+        except:
+            pass
         self.window.configure(background='#555555')
 
         self.backend = FourierVisions
