@@ -77,7 +77,7 @@ class ImageViewer(tk.Frame):
             self.logger.error('Cannot load image: %s', e)
 
         if not self.source_window.model_done:
-            self.after(1000, self.update_image)
+            self.after(2000, self.update_image)
 
 
 class PromptBar(tk.Frame):
@@ -126,13 +126,13 @@ class PromptBar(tk.Frame):
         self.source_window.image_viewer.start('images/' + self.get_prompt().replace(' ', '_') + '.png')
 
     def set_ready(self):
-        self.button.configure(bg='#7bcc52', activebackground='#7bcc52', activeforeground='#dddddd', state='normal')
+        self.button.configure(bg='#679c2a', activebackground='#679c2a', activeforeground='#dddddd', state='normal')
 
     def set_running(self):
-        self.button.configure(bg='#ccc052', activebackground='#ccc052', activeforeground='#dddddd')
+        self.button.configure(bg='#9c962a', activebackground='#9c962a', activeforeground='#dddddd')
 
     def set_error(self):
-        self.button.configure(bg='#cc5252', activebackground='#cc5252', activeforeground='#dddddd', state='disabled')
+        self.button.configure(bg='#9c2a2a', activebackground='#9c2a2a', activeforeground='#dddddd', state='disabled')
         self.after(1000, self.set_ready)
 
     def get_prompt(self):
@@ -168,6 +168,7 @@ class ModelProgress(tk.Frame):
         self.update_progress()
 
     def update_progress(self):
+        self.logger.debug('Updating progress bar')
         if self.source_window.model is not None:
             progress = self.source_window.model.progress
         else:
@@ -176,7 +177,7 @@ class ModelProgress(tk.Frame):
         self.stage_two['value'] = progress[1]
 
         if progress[1] < self.cycles_s2:
-            self.after(500, self.update_progress)
+            self.after(1000, self.update_progress)
         else:
             self.source_window.model_done = True
             self.source_window.prompt_bar.set_ready()
@@ -201,7 +202,7 @@ class SettingsPanel(tk.Frame):
                 'Backend',
                 'backend',
                 [
-                    ('PiramidVisions', PiramidVisions),
+                    ('PyramidVisions', PiramidVisions),
                     ('FourierVisions', FourierVisions),
                     ('CLIPCPPN', CLIPCPPN)
                 ]
@@ -226,9 +227,6 @@ class SeedControl(tk.Frame):
         self.name_label = Label(self, text='Seed', width=12, font='Arial 12', bg='#222222')
         self.random_seed = Button(
             self, text='Random',
-            bg='#7a52cc',
-            activebackground='#7a52cc',
-            activeforeground='#dddddd',
             font='Arial 12',
             borderwidth=0,
             highlightthickness=0,
@@ -236,9 +234,6 @@ class SeedControl(tk.Frame):
         )
         self.fixed_seed = Button(
             self, text='Fixed',
-            bg='#444444',
-            activebackground='#555555',
-            activeforeground='#dddddd',
             font='Arial 12',
             borderwidth=0,
             highlightthickness=0,
@@ -252,15 +247,17 @@ class SeedControl(tk.Frame):
         self.seed_entry.pack(side='left', expand=True, fill='both', padx=5, pady=5)
         self.seed_entry.grid_rowconfigure(0, weight=1)
 
+        self.set_seed(True)
+
     def set_seed(self, is_random):
         if is_random:
             self.is_random = True
-            self.random_seed.configure(bg='#7a52cc', activebackground='#7a52cc', activeforeground='#dddddd')
+            self.random_seed.configure(bg='#5a2a9c', activebackground='#5a2a9c', activeforeground='#dddddd')
             self.fixed_seed.configure(bg='#444444', activebackground='#555555', activeforeground='#dddddd')
         else:
             self.is_random = False
             self.random_seed.configure(bg='#444444', activebackground='#555555', activeforeground='#dddddd')
-            self.fixed_seed.configure(bg='#7a52cc', activebackground='#7a52cc', activeforeground='#dddddd')
+            self.fixed_seed.configure(bg='#5a2a9c', activebackground='#5a2a9c', activeforeground='#dddddd')
 
     def get(self):
         seed = None if self.is_random else int(self.seed_entry.get())
@@ -307,9 +304,6 @@ class Selector(tk.Frame):
         self.buttons = [
             Button(
                 self, text=self.show_names[button_id],
-                bg='#444444',
-                activebackground='#555555',
-                activeforeground='#dddddd',
                 font='Arial 12',
                 borderwidth=0,
                 highlightthickness=0,
@@ -329,7 +323,7 @@ class Selector(tk.Frame):
 
         for this_id, button in enumerate(self.buttons):
             if this_id == button_id:
-                button.configure(bg='#7a52cc', activebackground='#7a52cc', activeforeground='#dddddd')
+                button.configure(bg='#5a2a9c', activebackground='#5a2a9c', activeforeground='#dddddd')
             else:
                 button.configure(bg='#444444', activebackground='#555555', activeforeground='#dddddd')
 
