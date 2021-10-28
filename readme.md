@@ -1,10 +1,10 @@
 # Visions GUI
 
 An offline python frontend for the [QuadVisions Colab Notebook](https://colab.research.google.com/drive/1qgMT4-_kDIgZnNGMmrxmwzT3N6Ittw6B?usp=sharing#scrollTo=OOd34BtkuK63) using [tkinter](https://docs.python.org/3/library/tkinter.html).
-It offers basic options and interactively displays the generating image.
+It offers basic options and interactively displays the generating image. So far PyramidVisions, FourierVisions and CLIP + CPPN are implemented. Image generation code: Jens Goldberg / [Aransentin](https://https//twitter.com/aransentin), Colab by Philipuss#4066.
 
 ## Installation
-VisionsGUI was tested under Arch Linux and Windows 10 on a NVIDIA GPU. PyramidVisions and FourierVisions require at a card with at least 4GB of VRAM, CLIP+CPPN requires more than 8GB. CPU only is currently not supported.
+VisionsGUI was tested under Arch Linux and Windows 10 on a NVIDIA RTX 2070 Super. PyramidVisions and FourierVisions require at a card with at least 4GB of VRAM, CLIP + CPPN requires more than 8GB. CPU only is currently not supported.
 ### Dependencies
 Python and CUDA are required, the remaining dependencies can be installed via pip. Using a virtual environment like [venv](https://docs.python.org/3/library/venv.html) is preferred to keep the required pip packages seperate from your existing pip packages.
 #### Arch Linux
@@ -45,6 +45,6 @@ The settings panel contains a few option for generating an image:
 |-|:-|
 |Save every| Cycles completed before displaying and saving the next image. Lower values add more overhead. |
 |Rough cycles| Cycles during the first stage. |
-|Fine cycles| Cycles during the second stage one. |
+|Fine cycles| Cycles during the second stage. |
 |Seed| If a random or fixed seed is used. |
-|Backend| Which backend to use |
+|Backend| Which model to use |
