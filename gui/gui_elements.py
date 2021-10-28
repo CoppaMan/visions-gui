@@ -99,6 +99,7 @@ class PromptBar(tk.Frame):
 
     def start_generation(self):
         if len(self.get_prompt()) == 0:
+            self.set_error()
             self.logger.error('Prompt cannot be empty')
             return
         else:
@@ -125,13 +126,14 @@ class PromptBar(tk.Frame):
         self.source_window.image_viewer.start('images/' + self.get_prompt().replace(' ', '_') + '.png')
 
     def set_ready(self):
-        self.button.configure(bg='#7bcc52', activebackground='#7bcc52', activeforeground='#dddddd')
+        self.button.configure(bg='#7bcc52', activebackground='#7bcc52', activeforeground='#dddddd', state='normal')
 
     def set_running(self):
         self.button.configure(bg='#ccc052', activebackground='#ccc052', activeforeground='#dddddd')
 
     def set_error(self):
-        self.button.configure(bg='#cc5252', activebackground='#cc5252', activeforeground='#dddddd')
+        self.button.configure(bg='#cc5252', activebackground='#cc5252', activeforeground='#dddddd', state='disabled')
+        self.after(1000, self.set_ready)
 
     def get_prompt(self):
         return self.text_entry.get()
