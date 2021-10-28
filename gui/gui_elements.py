@@ -10,7 +10,7 @@ from tkinter import Button, Entry, Scale, Label
 from tkinter.ttk import Progressbar
 from PIL import ImageTk, Image, UnidentifiedImageError
 
-from models.backend import PiramidVisions, CLIPCPPN
+from models.backend import PiramidVisions, FourierVisions, CLIPCPPN
 
 
 class VisionGUI:
@@ -22,8 +22,9 @@ class VisionGUI:
         self.window.attributes('-type', 'dialog')
         self.window.configure(background='#555555')
 
-        self.backend = PiramidVisions
+        self.backend = FourierVisions
         self.model = None
+        self.model_done = True
 
         self.image_viewer = ImageViewer(self)
         self.prompt_bar = PromptBar(self)
@@ -45,22 +46,6 @@ class VisionGUI:
             self.model.stop()
 
         self.window.destroy()
-        
-
-        '''
-        self.logger.info('Shutting down VisionGUI')
-
-        if self.model is not None:
-            self.logger.debug('Stopping Model thread')
-            self.model.stop()
-            print(self.image_viewer)
-            print(self.prompt_bar)
-            print(self.model_progress)
-        else:
-            self.logger.debug('No Model to stop')
-
-        
-        '''
 
 
 class ImageViewer(tk.Frame):
@@ -80,7 +65,7 @@ class ImageViewer(tk.Frame):
         self.logger.debug('Image path set to %s', path)
         self.path = path
 
-        self.after(1000, self.update_image)
+        self.update_image()
 
     def update_image(self):
         try:
@@ -91,7 +76,8 @@ class ImageViewer(tk.Frame):
         except Exception as e:
             self.logger.error('Cannot load image: %s', e)
 
-        self.after(1000, self.update_image)
+        if not self.source_window.model_done:
+            self.after(1000, self.update_image)
 
 
 class PromptBar(tk.Frame):
@@ -124,9 +110,10 @@ class PromptBar(tk.Frame):
 
         self.logger.debug('Loading settings')
         settings = self.source_window.settings_panel.get_settings()
+        print(settings)
         
         self.logger.debug('Instanciate new model')
-        self.source_window.model = self.source_window.backend()
+        self.source_window.model = settings['backend']()
 
         self.source_window.model.set_texts(self.get_prompt())
         self.source_window.model.set_image_detail(settings['cycles_s1'], settings['cycles_s2'])
@@ -175,7 +162,8 @@ class ModelProgress(tk.Frame):
         self.stage_one.configure(maximum = cycles_s1)
         self.stage_two.configure(maximum = cycles_s2)
 
-        self.after(200, self.update_progress)
+        self.source_window.model_done = False
+        self.update_progress()
 
     def update_progress(self):
         if self.source_window.model is not None:
@@ -186,7 +174,10 @@ class ModelProgress(tk.Frame):
         self.stage_two['value'] = progress[1]
 
         if progress[1] < self.cycles_s2:
-            self.after(200, self.update_progress)
+            self.after(500, self.update_progress)
+        else:
+            self.source_window.model_done = True
+            self.source_window.prompt_bar.set_ready()
 
 
 class SettingsPanel(tk.Frame):
@@ -195,7 +186,6 @@ class SettingsPanel(tk.Frame):
         self.source_window = source_window
 
         self.options = [
-            #Selector(self, 'Aspect ratio', 'aspect_ratio', [('128:128', (128,128))]),
             #Slider(self, 'Scale', 'max_dim', 128, 2048, steps=128, default=512),
             Slider(self, 'Save every', 'save_every', 20, 1000, steps=20, default=200),
             Slider(self, 'Rough cycles', 'cycles_s1', 100, 5000, steps=100, default=1000),
@@ -203,7 +193,17 @@ class SettingsPanel(tk.Frame):
             #Slider(self, 'Saturation', 'chroma_noise_scale', -2, 2, steps=.4, default=0),
             #Slider(self, 'Brightness', 'luma_noise_mean', -3, 3, steps=.6, default=0),
             #Slider(self, 'Contrast', 'luma_noise_scale', -2, 2, steps=.4, default=0),
-            SeedControl(self)
+            SeedControl(self),
+            Selector(
+                self,
+                'Backend',
+                'backend',
+                [
+                    ('PiramidVisions', PiramidVisions),
+                    ('FourierVisions', FourierVisions),
+                    ('CLIPCPPN', CLIPCPPN)
+                ]
+            )
         ]
 
         for option in self.options:
