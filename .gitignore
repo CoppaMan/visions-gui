@@ -4,3 +4,4 @@ build
 images
 venv
 *.spec
+test.py
