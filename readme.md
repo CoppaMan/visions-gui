@@ -22,7 +22,7 @@ Python 3 should be available as a package for most distros but CUDA 11 might not
 
 
 ## Usage
-To start, run `python visions-gui.py`
+To start, run `python visions-gui.py`. An internet connection is only required when running a model for the first time. No connection is required after the model has been downloaded.
 ![alt text](docs/gui_start.png "The GUI")
 
 ### Modules
@@ -48,3 +48,9 @@ The settings panel contains a few option for generating an image:
 |Fine cycles| Cycles during the second stage. |
 |Seed| If a random or fixed seed is used. |
 |Backend| Which model to use |
+
+## Future stuff
+- [ ] Add DirectVisions
+- [ ] UI support for multiple text / weight pairs
+- [ ] UI support for variable image sizes
+- [ ] Compiled executables
