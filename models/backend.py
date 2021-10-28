@@ -13,7 +13,7 @@ import numpy as np
 from worker.thread import ThreadedWorker
 
 
-class VisionBackend(ThreadedWorker):
+class VisionsBackend(ThreadedWorker):
     def __init__(self):
         ThreadedWorker.__init__(self)
 
@@ -59,10 +59,8 @@ class VisionBackend(ThreadedWorker):
         #@markdown Number of times to run
         images_n = 1 #@param {type:"number"}
 
-        save_interval = 1000 #@param {type:"number"}
-
         #@markdown Pixel art works only in Fourier and Direct Visions
-        pixel_art = False #@param {type:"boolean"}
+        self.pixel_art = False #@param {type:"boolean"}
 
     def set_texts(self, texts):
         '''
@@ -120,7 +118,7 @@ class VisionBackend(ThreadedWorker):
         )
 
 
-class PiramidVisions(VisionBackend):
+class PiramidVisions(VisionsBackend):
     def __init__(self):
         VisionBackend.__init__(self)
 
@@ -549,7 +547,330 @@ class PiramidVisions(VisionBackend):
                 self.progress[n] = c+1
 
 
-class CLIPCPPN(VisionBackend):
+class FourierVisions(VisionsBackend):
+    def __init__(self):
+        VisionsBackend.__init__(self)
+
+        self.chroma_noise_scale = 1.00000 # Saturation (0 - 2 is safe but you can go as high as you want)
+        self.luma_noise_mean = 0.0 # Brightness (-3 to 3 seems safe but around 0 seems to work better)
+        self.luma_noise_scale = 1.00000 # Contrast (0-2 is safe but you can go as high as you want)
+        self.init_noise_clamp = 0 # Turn this down if you're getting persistent super bright or dark spots.
+
+        self.lr_scale = 100#5e-5
+        # hi_freq_decay = 
+        self.eq_pow = 1
+        self.eq_min = 1e-6
+
+        self.resample_image_prompts = False
+
+        # Size of the smallest pyramid layer
+        aspect_ratio = (3,4)#(3, 4)
+
+        # Max dim of the final output image.
+        max_dim = 1024
+        scale = max_dim // max(aspect_ratio)
+        self.dims = (int(aspect_ratio[0] * scale), int(aspect_ratio[1] * scale))
+
+        self.stages = (
+            { #First stage does rough detail. It's going to look really coherent but blurry
+                "cuts": 2,
+                "cycles": 1000,
+                "lr_luma": 1,#3e-2,
+                "decay_luma": 0.0,
+                "lr_chroma": 0.5,#1.5e-2,
+                "decay_chroma": 0.0,
+                "noise": 0.2,
+                "denoise": 10.0,
+                "checkin_interval": 100
+            }, { # 2nd stage does fine detail. Going to get much clearer
+                "cuts": 2,
+                "cycles": 1000,
+                "lr_luma": 0.5,
+                "decay_luma": 0,
+                "lr_chroma": 0.25,
+                "decay_chroma": 0,
+                "noise": 0.2,
+                "denoise": 1,
+                "checkin_interval": 100,
+            }
+        )
+
+        self.debug_clip_cuts = False
+
+        self.eq = self.generate_filter(self.dims, self.eq_pow, self.eq_min)
+
+        self.bilinear = torchvision.transforms.functional.InterpolationMode.BILINEAR
+        self.bicubic = torchvision.transforms.functional.InterpolationMode.BICUBIC
+
+        torch.autograd.set_grad_enabled(False)
+        torch.backends.cudnn.benchmark = True
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+
+        self.calc_perceptors()
+        
+    def generate_filter(self, dims, eq_pow, eq_min):
+        eqx = torch.fft.fftfreq(dims[0])
+        eqy = torch.fft.fftfreq(dims[1])
+        eq = torch.outer(torch.abs(eqx), torch.abs(eqy))
+        eq = eq - eq.min()
+        eq = 1 - eq / eq.max()
+        eq = torch.pow(eq, eq_pow)
+        eq = eq * (1-eq_min) + eq_min
+        return eq
+
+    def normalize_image(self, image):
+        R = (image[:,0:1] - 0.48145466) /  0.26862954
+        G = (image[:,1:2] - 0.4578275) / 0.26130258 
+        B = (image[:,2:3] - 0.40821073) / 0.27577711
+        return torch.cat((R, G, B), dim=1)
+
+    @torch.no_grad()
+    def loadImage(self, filename):
+        data = open(filename, "rb").read()
+        image = torch.ops.image.decode_png(torch.as_tensor(bytearray(data)).cpu().to(torch.uint8), 3).cuda().to(torch.float32) / 255.0
+        # image = normalize_image(image)
+        return image.unsqueeze(0).cuda()
+
+    def getClipTokens(self, image, cuts, noise, do_checkin, perceptor):
+        im = self.normalize_image(image)
+        cut_data = torch.zeros(cuts, 3, perceptor["size"], perceptor["size"])
+        for c in range(cuts):
+            angle = random.uniform(-20.0, 20.0)
+            img = torchvision.transforms.functional.rotate(im, angle=angle, expand=True, interpolation=self.bilinear)
+
+            padv = im.size()[2] // 8
+            img = torch.nn.functional.pad(img, pad=(padv, padv, padv, padv))
+
+            size = img.size()[2:4]
+            mindim = min(*size)
+
+            if mindim <= perceptor["size"]-32:
+                width = mindim - 1
+            else:
+                width = random.randint( perceptor["size"]-32, mindim-1 )
+
+            oy = random.randrange(0, size[0]-width)
+            ox = random.randrange(0, size[1]-width)
+            img = img[:,:,oy:oy+width,ox:ox+width]
+
+            if self.pixel_art:
+                img = torch.nn.functional.interpolate(img, size=(perceptor["size"], perceptor["size"]), mode='nearest')
+            else:
+                img = torch.nn.functional.interpolate(img, size=(perceptor["size"], perceptor["size"]), mode='bilinear', align_corners=False)
+            cut_data[c] = img
+
+        cut_data += noise * torch.randn_like(cut_data, requires_grad=False)
+
+        if self.debug_clip_cuts and do_checkin:
+            displayImage(cut_data)
+
+        clip_tokens = perceptor['model'].encode_image(cut_data)
+        return clip_tokens
+
+
+    def loadPerceptor(self, name):
+        model, preprocess = clip.load(name, device="cuda")
+
+        tokens = []
+        imgs = []
+        for text in self.texts:
+            tok = model.encode_text(clip.tokenize(text["text"]).cuda())
+            tokens.append( tok )
+
+        perceptor = {"model":model, "size": preprocess.transforms[0].size, "tokens": tokens, }
+        for img in self.images:
+            image = loadImage(img["fpath"])
+            if resample_image_prompts:
+                imgs.append(image)
+            else:
+                tokens = getClipTokens(image, img["cuts"], img["noise"], False, perceptor )
+                imgs.append(tokens)
+
+        perceptor["images"] = imgs
+        return perceptor
+
+    @torch.no_grad()
+    def saveImage(self, image, filename):
+        # R = image[:,0:1] * 0.26862954 + 0.48145466
+        # G = image[:,1:2] * 0.26130258 + 0.4578275
+        # B = image[:,2:3] * 0.27577711 + 0.40821073
+        # image = torch.cat((R, G, B), dim=1)
+        size = image.size()
+
+        image = (image[0].clamp(0, 1) * 255).to(torch.uint8)
+        png_data = torch.ops.image.encode_png(image.cpu(), 6)
+        open(filename, "wb").write(bytes(png_data))
+
+    # TODO: Use torchvision normalize / unnormalize
+    def unnormalize_image(self, image):
+        R = image[:,0:1] * 0.26862954 + 0.48145466
+        G = image[:,1:2] * 0.26130258 + 0.4578275
+        B = image[:,2:3] * 0.27577711 + 0.40821073
+        
+        return torch.cat((R, G, B), dim=1)
+
+    def paramsToImage(self, params_luma, params_chroma):
+        CoCg = torch.fft.irfft2(params_chroma, norm="backward")
+        luma = torch.fft.irfft2(params_luma, norm="backward")
+        # print(luma.min(), luma.mean(), luma.max())
+        # print(CoCg.min(), CoCg.mean(), CoCg.max())
+        # luma = torch.sigmoid(luma)
+        # CoCg = torch.sigmoid(CoCg)
+        # CoCg = CoCg * 2 - 1
+        luma = (luma / 2.0 + 0.5).clamp(0,1)
+        CoCg = CoCg.clamp(-1,1)
+        Co = CoCg[:,0]
+        Cg = CoCg[:,1]
+
+        tmp = luma - Cg/2
+        G = Cg + tmp
+        B = tmp - Co/2
+        R = B + Co
+        im_torch = torch.cat((R, G, B), dim=1)#.clamp(0,1)
+        im_torch = im_torch[:,:,:,:self.dims[1]]
+        return im_torch
+
+    def imageToParams(self, image):
+        image = image#.clamp(0,1)
+        R, G, B = image[:,0:1], image[:,1:2], image[:,2:3]
+        luma = R * 0.25 + G * 0.5 + B * 0.25
+        Co = R  - B
+        tmp = B + Co / 2
+        Cg = G - tmp
+        luma = tmp + Cg / 2
+
+        nsize = luma.size()[2:4]
+        chroma =  torch.cat([Co,Cg], dim=1)
+        chroma = chroma / 2.0 + 0.5
+        chroma = torch.logit(chroma, eps=1e-8)
+        luma = torch.logit(luma, eps=1e-8)
+        chroma = torch.fft.rfft2(chroma)
+        luma = torch.fft.rfft2(luma)
+        return luma, chroma 
+
+    @torch.no_grad()
+    def displayImage(self, image):
+        size = image.size()
+
+        width = size[0] * size[3] + (size[0]-1) * 4
+        image_row = torch.zeros( size=(3, size[2], width), dtype=torch.uint8 )
+
+        nw = 0
+        for n in range(size[0]):
+            image_row[:,:,nw:nw+size[3]] = (image[n,:].clamp(0, 1) * 255).to(torch.uint8)
+            nw += size[3] + 4
+
+        jpeg_data = torch.ops.image.encode_png(image_row.cpu(), 6)
+        image = display.Image(bytes(jpeg_data))
+        display.display( image )
+
+    def lossClip(self, image, cuts, noise, do_checkin):
+        losses = []
+
+        max_loss = 0.0
+        for text in self.texts:
+            max_loss += abs(text["weight"]) * len(self.perceptors)
+        for img in self.images:
+            max_loss += abs(img["weight"]) * len(self.perceptors)
+
+        for perceptor in self.perceptors:
+            clip_tokens = self.getClipTokens(image, cuts, noise, do_checkin, perceptor)
+            for t, tokens in enumerate( perceptor["tokens"] ):
+                similarity = torch.cosine_similarity(tokens, clip_tokens)
+                weight = self.texts[t]["weight"]
+                if weight > 0.0:
+                    loss = (1.0 - similarity) * weight
+                else:
+                    loss = similarity * (-weight)
+                losses.append(loss / max_loss)
+
+        for img in self.images:
+            for i, prompt_image in enumerate(perceptor["images"]):
+                if resample_image_prompts:
+                    img_tokens = getClipTokens(prompt_image, images[i]["cuts"], images[i]["noise"], False, perceptor)
+                else:
+                    img_tokens = prompt_image
+                weight = images[i]["weight"] / float(images[i]["cuts"])
+                for token in img_tokens:
+                    similarity = torch.cosine_similarity(token.unsqueeze(0), clip_tokens)
+                    if weight > 0.0:
+                        loss = (1.0 - similarity) * weight
+                    else:
+                        loss = similarity * (-weight)
+                    losses.append(loss / max_loss)
+        return losses
+
+    def lossTV(self, image, strength):
+        Y = (image[:,:,1:,:] - image[:,:,:-1,:]).abs().mean()
+        X = (image[:,:,:,1:] - image[:,:,:,:-1]).abs().mean()
+        loss = (X + Y) * 0.5 * strength
+        return loss
+
+    def cycle(self, c, stage, optimizer, params_luma, params_chroma, eq):
+        do_checkin = (c+1) % stage["checkin_interval"] == 0 or c == 0
+        with torch.enable_grad():
+            image = self.paramsToImage(params_luma, params_chroma)
+
+            optimizer.zero_grad(set_to_none=True)
+
+            losses = self.lossClip( image, stage["cuts"], stage["noise"], do_checkin )
+
+            losses += [self.lossTV( image, stage["denoise"] )]
+            
+            loss_total = sum(losses).sum()
+
+            loss_total.backward(retain_graph=False)
+
+            optimizer.step()
+
+        if c % self.save_interval == 0:
+            TV = losses[-1].sum().item()
+            print( "Cycle:", str(stage["n"]) + ":" + str(c), "CLIP Loss:", loss_total.item() - TV, "TV loss:", TV)
+            nimg = self.paramsToImage(params_luma, params_chroma)
+            # self.displayImage(torch.nn.functional.interpolate(nimg, size=display_size, mode='self.bilinear'))
+            self.saveImage(nimg, 'images/' + self.texts[0]["text"].replace(' ', '_') + ".png" )
+
+    def init_optim(self, params_luma, params_chroma, stage):
+        params = []
+        params.append({"params":params_luma, "lr":stage["lr_luma"] * self.lr_scale, "weight_decay":stage["decay_luma"] * self.lr_scale})
+        params.append({"params":params_chroma, "lr":stage["lr_chroma"] * self.lr_scale, "weight_decay":stage["decay_chroma"] * self.lr_scale})
+        return torch.optim.AdamW(params)
+
+    def run(self):
+        print('Started run with ' + self.texts[0]["text"])
+        param_luma = None
+        param_chroma = None
+        eq = self.generate_filter(self.dims, self.eq_pow, self.eq_min)
+        if self.initial_image is not None:
+            image = self.loadImage(self.initial_image)
+            image = torch.nn.functional.interpolate(image, size=self.dims[-1], mode='self.bicubic', align_corners=False)
+            luma, chroma = self.imageToParams(image)
+            param_luma = torch.nn.parameter.Parameter( luma.double().cuda(), requires_grad=True)
+            param_chroma = torch.nn.parameter.Parameter( chroma.double().cuda(), requires_grad=True)
+        else:
+            luma = torch.randn(size = (1,1,self.dims[0], self.dims[1])) * self.luma_noise_scale * eq
+            chroma = torch.randn(size = (1,2,self.dims[0], self.dims[1])) * self.chroma_noise_scale * eq
+            luma = luma.clamp(-self.init_noise_clamp, self.init_noise_clamp)
+            chroma = chroma.clamp(-self.init_noise_clamp, self.init_noise_clamp)
+            param_luma = torch.nn.parameter.Parameter( luma.cuda(), requires_grad=True)
+            param_chroma = torch.nn.parameter.Parameter( chroma.cuda(), requires_grad=True)
+        optimizer = self.init_optim(param_luma, param_chroma, self.stages[0])
+
+        print('Setup complete')
+
+        for n, stage in enumerate(self.stages):
+            stage["n"] = n
+            if n > 0:
+                optimizer.param_groups[0]["lr"] = stage["lr_luma"] * self.lr_scale
+                optimizer.param_groups[1]["lr"] = stage["lr_chroma"] * self.lr_scale
+            for c in range(stage["cycles"]):
+                if self.stop_signal:
+                    print('Stopping')
+                    return
+                self.cycle( c, stage, optimizer, param_luma, param_chroma, eq)
+
+
+class CLIPCPPN(VisionsBackend):
     class Residual(nn.Module):
         def __init__(self, c):
             super(Residual, self).__init__()
