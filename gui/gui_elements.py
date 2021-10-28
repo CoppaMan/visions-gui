@@ -19,7 +19,8 @@ class VisionGUI:
         self.logger.info('Starting VisionGUI')
         self.window = tk.Tk()
         self.window.configure(bg='#222222')
-        self.window.title("Vision GUI")
+        self.window.title("Visions GUI")
+        self.window.iconbitmap('icon.ico')
         try:
             self.window.attributes('-type', 'dialog')
         except:
@@ -91,7 +92,7 @@ class PromptBar(tk.Frame):
 
         #self.browse = Button(self, text="AI Art", font='Arial 12 bold', bg='#55dd00', borderwidth=0, highlightthickness=0, command=self.toggle_art)
         self.text_entry = Entry(self, font='Arial 12 bold', borderwidth=0, highlightthickness=0, insertbackground='#dddddd', fg='#dddddd', bg='#666666', justify='center')
-        self.button = Button(self, text="GO", font='Arial 12 bold', borderwidth=0, highlightthickness=0, command=self.start_generation, fg='#dddddd')
+        self.button = Button(self, text="GO", font='Arial 12 bold', width=5, borderwidth=0, highlightthickness=0, command=self.start_generation, fg='#dddddd')
         self.set_ready()
 
         self.button.pack(side='right')
