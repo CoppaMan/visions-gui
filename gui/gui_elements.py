@@ -20,7 +20,7 @@ class VisionGUI:
         self.window = tk.Tk()
         self.window.configure(bg='#222222')
         self.window.title("Visions GUI")
-        self.window.iconbitmap('icon.ico')
+        #self.window.iconbitmap('icon.ico')
         try:
             self.window.attributes('-type', 'dialog')
         except:
