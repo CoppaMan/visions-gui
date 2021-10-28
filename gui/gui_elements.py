@@ -125,6 +125,7 @@ class PromptBar(tk.Frame):
         self.source_window.model.set_save_interval(settings['save_every'])
 
         self.source_window.model.start()
+        self.source_window.window.title("Visions GUI - " + self.get_prompt())
         self.source_window.model_progress.start(settings['cycles_s1'], settings['cycles_s2'])
         self.source_window.image_viewer.start('images/' + self.get_prompt().replace(' ', '_') + '.png')
 
@@ -207,7 +208,7 @@ class SettingsPanel(tk.Frame):
                 [
                     ('PyramidVisions', PiramidVisions),
                     ('FourierVisions', FourierVisions),
-                    ('CLIP+CPPN', CLIPCPPN)
+                    ('CLIP + CPPN', CLIPCPPN)
                 ]
             )
         ]
@@ -233,6 +234,7 @@ class SeedControl(tk.Frame):
             font='Arial 12',
             fg='#dddddd',
             borderwidth=0,
+            width=8,
             highlightthickness=0,
             command=lambda x=True: self.set_seed(x)
         )
@@ -241,6 +243,7 @@ class SeedControl(tk.Frame):
             font='Arial 12',
             fg='#dddddd',
             borderwidth=0,
+            width=8,
             highlightthickness=0,
             command=lambda x=False: self.set_seed(x)
         )
