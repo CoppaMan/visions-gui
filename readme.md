@@ -4,10 +4,21 @@ An offline python frontend for the [QuadVisions Colab Notebook](https://colab.re
 It offers basic options and interactively displays the generating image.
 
 ## Installation
+VisionsGUI was tested under Arch Linux and Windows 10 on a NVIDIA GPU. PyramidVisions and FourierVisions require at a card with at least 4GB of VRAM, CLIP+CPPN requires more than 8GB. CPU only is currently not supported.
+### Dependencies
+Python and CUDA are required, the remaining dependencies can be installed via pip. Using a virtual environment like [venv](https://docs.python.org/3/library/venv.html) is preferred to keep the required pip packages seperate from your existing pip packages.
+#### Arch Linux
+1) Install Python 3 and pip via `pacman -S python python-pip`
+2) Install the CUDA 11 toolkit via `pacman -S cuda`
+3) Install the pip requirements: `pip install -r requirements.txt`
 
-1) Install Python 3
-2) Install CUDA
-3) Install pip requirements: `pip install -r requirements`
+#### Windows
+1) Install [Python 3](https://www.python.org/downloads/windows/)
+2) Install the [CUDA 11 toolkit](https://developer.nvidia.com/cuda-downloads?target_os=Windows&target_arch=x86_64)
+3) Install the pip requirements: `pip.exe install -r requirements.txt`
+
+#### Other Linux distros
+Python 3 should be available as a package for most distros but CUDA 11 might not be. In the latter case, an installer is available on [NVIDIA's site](https://developer.nvidia.com/cuda-downloads?target_os=Linux).
 
 
 ## Usage
