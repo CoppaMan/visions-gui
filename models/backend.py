@@ -120,7 +120,7 @@ class VisionsBackend(ThreadedWorker):
 
 class PiramidVisions(VisionsBackend):
     def __init__(self):
-        VisionBackend.__init__(self)
+        VisionsBackend.__init__(self)
 
         self.color_space =  "YCoCg" # "RGB"
 
@@ -868,6 +868,7 @@ class FourierVisions(VisionsBackend):
                     print('Stopping')
                     return
                 self.cycle( c, stage, optimizer, param_luma, param_chroma, eq)
+                self.progress[n] = c+1
 
 
 class CLIPCPPN(VisionsBackend):
@@ -927,7 +928,7 @@ class CLIPCPPN(VisionsBackend):
             return self.module_sequential(x)
 
     def __init__(self):
-        VisionBackend.__init__(self)
+        VisionsBackend.__init__(self)
         #TODO: test different configs
         # Wider in the middle seems to be the best balance of width / depth
         # SELU seems to have the least problem with exploding / vanishing gradients
