@@ -10,7 +10,7 @@ from tkinter import Button, Entry, Scale, Label
 from tkinter.ttk import Progressbar
 from PIL import ImageTk, Image, UnidentifiedImageError
 
-from models.backend import FourierVisions, PiramidVisions
+from models.backend import PiramidVisions, CLIPCPPN
 
 
 class VisionGUI:
@@ -41,19 +41,26 @@ class VisionGUI:
         self.window.mainloop()
 
     def on_closing(self):
-        self.logger.info('Shutting down VisionGUI')
+        if self.model is not None:
+            self.model.stop()
 
-        self.logger.debug('Stopping ImageViewer thread')
-        self.image_viewer.stop()
-        self.model_progress.stop()
+        self.window.destroy()
+        
+
+        '''
+        self.logger.info('Shutting down VisionGUI')
 
         if self.model is not None:
             self.logger.debug('Stopping Model thread')
             self.model.stop()
+            print(self.image_viewer)
+            print(self.prompt_bar)
+            print(self.model_progress)
         else:
             self.logger.debug('No Model to stop')
 
-        self.window.destroy()
+        
+        '''
 
 
 class ImageViewer(tk.Frame):
@@ -69,35 +76,22 @@ class ImageViewer(tk.Frame):
         self.tkimg.photo = self.img
         self.tkimg.pack()
 
-        self.running = True
-        self.runner = threading.Thread(target=self.update, daemon=True)
-        self.runner.start()
-
-        self.setting = None
-
-    def set_image_path(self, path):
+    def start(self, path):
         self.logger.debug('Image path set to %s', path)
         self.path = path
 
-    def stop(self):
-        self.running = False
-        self.logger.debug('Joining ImageViewer thread')
-        self.runner.join()
+        self.after(1000, self.update_image)
 
-    def update(self):
-        while True:
-            self.logger.debug('Stopping signal is %s', self.running)
-            if not self.running:
-                self.logger.debug('ImageViewer received stop signal')
-                return
-            try:
-                self.logger.debug('Refreshing image at %s', self.path)
-                self.img = ImageTk.PhotoImage(Image.open(self.path))
-                self.tkimg.configure(image=self.img)
-                self.tkimg.image = self.img
-            except Exception as e:
-                self.logger.error('Cannot load image: %s', e)
-            time.sleep(1)
+    def update_image(self):
+        try:
+            self.logger.debug('Refreshing image at %s', self.path)
+            self.img = ImageTk.PhotoImage(Image.open(self.path))
+            self.tkimg.configure(image=self.img)
+            self.tkimg.image = self.img
+        except Exception as e:
+            self.logger.error('Cannot load image: %s', e)
+
+        self.after(1000, self.update_image)
 
 
 class PromptBar(tk.Frame):
@@ -134,20 +128,14 @@ class PromptBar(tk.Frame):
         self.logger.debug('Instanciate new model')
         self.source_window.model = self.source_window.backend()
 
-        self.source_window.model.set_prompt(self.get_prompt())
-        #self.source_window.model.set_image_size(settings['max_dim'])
+        self.source_window.model.set_texts(self.get_prompt())
         self.source_window.model.set_image_detail(settings['cycles_s1'], settings['cycles_s2'])
-        #self.source_window.model.set_color_properties(settings['chroma_noise_scale'], settings['luma_noise_mean'], settings['luma_noise_scale'])
         self.source_window.model.set_seed(settings['seed'])
-
-        self.source_window.model_progress.setup(self.source_window.model, settings['cycles_s1'], settings['cycles_s2'])
-
         self.source_window.model.set_save_interval(settings['save_every'])
 
-        self.source_window.model.done_command(self)
-
         self.source_window.model.start()
-        self.source_window.image_viewer.set_image_path('images/' + self.get_prompt().replace(' ', '_') + '.png')
+        self.source_window.model_progress.start(settings['cycles_s1'], settings['cycles_s2'])
+        self.source_window.image_viewer.start('images/' + self.get_prompt().replace(' ', '_') + '.png')
 
     def set_ready(self):
         self.button.configure(bg='#7bcc52', activebackground='#7bcc52', activeforeground='#dddddd')
@@ -171,7 +159,6 @@ class ModelProgress(tk.Frame):
         self.source_window = source_window
 
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.model = None
 
         self.stage_one = Progressbar(self, orient='horizontal', mode='determinate')
         self.stage_two = Progressbar(self, orient='horizontal', mode='determinate')
@@ -182,35 +169,24 @@ class ModelProgress(tk.Frame):
         self.stage_two.pack(side='left', expand=True, fill='both')
         self.stage_two.grid_rowconfigure(0, weight=1)
 
-        self.running = True
-        self.runner = threading.Thread(target=self.update, daemon=True)
-        self.runner.start()
-
-    def setup(self, model, cycles_s1, cycles_s2):
+    def start(self, cycles_s1, cycles_s2):
+        self.cycles_s1 = cycles_s1
+        self.cycles_s2 = cycles_s2
         self.stage_one.configure(maximum = cycles_s1)
         self.stage_two.configure(maximum = cycles_s2)
 
-        self.model = model
+        self.after(200, self.update_progress)
 
-    def stop(self):
-        self.running = False
-        self.logger.debug('Joining ImageViewer thread')
-        self.runner.join()
+    def update_progress(self):
+        if self.source_window.model is not None:
+            progress = self.source_window.model.progress
+        else:
+            progress = [0, 0]
+        self.stage_one['value'] = progress[0]
+        self.stage_two['value'] = progress[1]
 
-    def update(self):
-        while True:
-            self.logger.debug('Stopping signal is %s', self.running)
-            if not self.running:
-                self.logger.debug('Progress bar received stop signal')
-                return
-            if self.model is None:
-                self.stage_one['value'] = 0
-                self.stage_two['value'] = 0
-            else:
-                progress = self.model.progress
-                self.stage_one['value'] = progress[0]
-                self.stage_two['value'] = progress[1]
-            time.sleep(1)
+        if progress[1] < self.cycles_s2:
+            self.after(200, self.update_progress)
 
 
 class SettingsPanel(tk.Frame):

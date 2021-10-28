@@ -1,27 +1,30 @@
-from time import sleep
-
-from worker.thread import ModelWorker
-
-class Test(ModelWorker):
+class A:
     def __init__(self):
-        ModelWorker.__init__(self)
+        pass
 
-    def function(self):
-        for i in range(5):
-            sleep(.5)
-            print(i+1)
-        self.notify_image()
-        for i in range(5):
-            sleep(.5)
-            print(i+6)
 
-test = Test()
-test.start()
+class B:
+    def __init__(self):
+        self.a = A()
 
-@test.register_done
-def finish():
-    print('Sequence is done!')
 
-@test.register_image
-def update():
-    print('halfways!')
+b = B()
+
+
+def funcDec(func):
+    localVariable = "I'm a local string"
+
+    def wrapped(*args):
+        print("Calling localVariable from funcDec " + localVariable)
+        func(*args)
+        print("done with calling f1")
+
+    wrapped.attrib = localVariable
+    return wrapped
+
+@funcDec
+def f1(x, y):
+    print(x + y)
+    print('f1.attrib: {!r}'.format(f1.attrib))
+
+f1(2, 3)
