@@ -10,7 +10,7 @@ from tkinter import Button, Entry, Scale, Label
 from tkinter.ttk import Progressbar
 from PIL import ImageTk, Image, UnidentifiedImageError
 
-from models.backend import PiramidVisions, FourierVisions, CLIPCPPN
+from models.visions import PiramidVisions, FourierVisions, CLIPCPPN
 
 
 class VisionGUI:

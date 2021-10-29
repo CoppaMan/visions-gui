@@ -547,6 +547,205 @@ class PiramidVisions(VisionsBackend):
                 self.progress[n] = c+1
 
 
+class DirectVisions(VisionsBackend):
+    def __init__(self):
+        chroma_fraction = 1
+        sigmoid_params = True # If you change this you'll have to change the learning rates too... No great way around that.
+
+        # Todo: Make this work right with chroma_fraction. Currently only bicubic and bilinear do
+        # Bilinear and bicubic resize in param space, lanczos and esrgan in image space
+        # ESRGAN doesn't currently work
+        upscaling_mode = "lanczos" #"bilinear" , "bicubic" "lanczos" "esrgan"
+
+        # Gaussian noise is normal noise in the sigmoid YCoCv space. Uniform noise is in the RGB space.
+        init_type = "gaussian" # "uniform"
+
+        # Grayscale initial noise -- for all noise types
+        greyscale_init = False
+
+        #Params for uniform init noise
+        init_gamma = 1.0 # contrast
+        init_gain = 1.0 # Brightness
+
+        # Params for gaussian init noise
+        chroma_noise_scale = 0.0 # Saturation (0 - 2 is safe but you can go as high as you want)
+        luma_noise_mean = 0.0 # Brightness (-3 to 3 seems safe but around 0 seems to work better)
+        luma_noise_scale = 0.0 # Contrast (0-2 is safe but you can go as high as you want)
+        init_noise_clamp = 8.0 # Turn this down if you're getting persistent super bright or dark spots.
+
+        # display_size = ( 640, 480, )
+        warmup_its = 50
+
+        resample_image_prompts = False
+
+        aspect_ratio = (3, 4)#(4, 3)
+        display_size = [i * 160 for i in aspect_ratio]
+
+        self.stages = (
+                    {
+                # "dim": (4, 3,  ),
+                "scale": 1,
+                "cuts": 2,
+                "cycles": 500,
+                "lr_luma": 5e-2,
+                "decay_luma": 0,
+                "lr_chroma": 3e-2, # Chroma LR in first cycle controls saturation of the final image
+                "decay_chroma": 0,
+                "noise": 0.2,
+                "denoise": 0.00,
+                "checkin_interval": 100,
+                },{
+                # "dim": (20, 15,  ),
+                "scale": 5,
+                "cuts": 2,
+                "cycles": 500,
+                "lr_luma": 5e-2,
+                "decay_luma": 0,
+                "lr_chroma": 3e-2, # Chroma LR in first cycle controls saturation of the final image
+                "decay_chroma": 0,
+                "noise": 0.2,
+                "denoise": 0.01,
+                "checkin_interval": 100,
+                "init_noise": 0.25 # Scale of uniform noise to add at the start of this iteration
+                },{
+                # "dim": (40, 30,  ),
+                "scale": 10,
+                "cuts": 2,
+                "cycles": 500,
+                "lr_luma": 5e-2,
+                "decay_luma": 0,
+                "lr_chroma": 3e-2, # Chroma LR in first cycle controls saturation of the final image
+                "decay_chroma": 0,
+                "noise": 0.2,
+                "denoise": 0.1,
+                "checkin_interval": 100,
+                "init_noise": 0.2
+                },{
+                "scale": 20,
+                # "dim": (80, 60,  ),
+                "cuts": 2,
+                "cycles": 500,
+                "lr_luma": 5e-2,
+                "decay_luma": 0,
+                "lr_chroma": 3e-2, # Chroma LR in first cycle controls saturation of the final image
+                "decay_chroma": 0,
+                "noise": 0.2,
+                "denoise": 0.20,
+                "checkin_interval": 100,
+                "init_noise": 0.2
+                },{
+                # "dim": (160, 120,  ),
+                "scale": 40,
+                "cuts": 2,
+                "cycles": 700,
+                "lr_luma": 3e-2,
+                "decay_luma": 0,
+                "lr_chroma": 1.5e-2,
+                "decay_chroma": 0,
+                "noise": 0.2,
+                "denoise": 0.25,
+                "checkin_interval": 100,
+                "init_noise": 0.2
+            },{
+                # "dim": (320, 240,  ),
+                "scale": 80,
+                "cuts": 2,
+                "cycles": 1000,
+                "lr_luma": 3e-2,
+                "decay_luma": 0,
+                "lr_chroma": 1e-2,
+                "decay_chroma": 0,
+                "noise": 0.2,
+                "denoise": 0.60,
+                "checkin_interval": 100,
+                "init_noise": 0.2
+            }, 
+            # {
+            #     "dim": (240, 320),
+            #     "cuts": 2,
+            #     "cycles": 500,
+            #     "lr_luma": 4e-2,
+            #     "decay_luma": 0,
+            #     "lr_chroma": 1e-2,
+            #     "decay_chroma": 0,
+            #     "noise": 0.2,
+            #     "denoise": 1.5,
+            #     "checkin_interval": 100
+            # },
+            {
+                # "dim": (640, 480, ),
+                "scale": 160,
+                "cuts": 2,
+                "cycles": 1000,
+                "lr_luma": 3e-2,
+                "decay_luma": 0,
+                "lr_chroma": 7e-3,
+                "decay_chroma": 0,
+                "noise": 0.2,
+                "denoise": 3.0,
+                "checkin_interval": 100,
+                "init_noise": 0.15
+            },
+            # {
+            #     "dim": (480, 640),
+            #     "cuts": 2,
+            #     "cycles": 1000,
+            #     "lr_luma": 3e-2,
+            #     "decay_luma": 0.0,
+            #     "lr_chroma": 1e-2,
+            #     "decay_chroma": 0.0,
+            #     "noise": 0.2,
+            #     "denoise": 1.5,
+            #     "checkin_interval": 100
+            # },
+            {
+                # "dim": (640, 480,  ),
+                "scale": 320,
+                "cuts": 2,
+                "cycles": 1000,
+                "lr_luma": 2e-2,
+                "decay_luma": 0.0,
+                "lr_chroma": 2e-3,
+                "decay_chroma": 0.0,
+                "noise": 0.2,
+                "denoise": 1.0,
+                "checkin_interval": 100
+            # },{ # Comment out this last one if you don't care about large image size
+            #     # "dim": (  1280, 960, ),
+            #     "scale": 640,
+            #     "cuts": 2,
+            #     "cycles": 1000,
+            #     "lr_luma": 2e-2,
+            #     "decay_luma": 0,
+            #     "lr_chroma": 2e-3,
+            #     "decay_chroma": 0,
+            #     "noise": 0.2,
+            #     "denoise": 2.5,
+            #     "checkin_interval": 100,
+            #     "init_noise": 0.1
+            # },    { # Comment out this last one if you don't care about large image size
+                # # "dim": (1920 , 2560,),
+                # "scale": 512,
+            #     "cuts": 2,
+            #     "cycles": 1000,
+            #     "lr_luma": 2e-2,
+            #     "decay_luma": 0,
+            #     "lr_chroma": 2e-3,
+            #     "decay_chroma": 0,
+            #     "noise": 0.2,
+            #     "denoise": 4.0,
+            #     "checkin_interval": 100,
+            #     "init_noise": 0.05
+            },
+        )
+
+        for stage in self.stages:
+            if "dim" not in stage:
+                stage["dim"] = (aspect_ratio[0] * stage["scale"], aspect_ratio[1] * stage["scale"])
+
+        debug_clip_cuts = False
+
+
 class FourierVisions(VisionsBackend):
     def __init__(self):
         VisionsBackend.__init__(self)
