@@ -29,16 +29,16 @@ To start, run `python visions-gui.py`. An internet connection is only required w
 The GUI is made up of multiple modules which offer feedback to the user and allow to change a handful of settings.
 #### Image viewer
 The image viewer displays the current progress of the image and is periodically updated during generation. The displayed images are also accessible in the `images` folder.
-#### Progress bar
-The progress bar shows the progress of the two stages from left to right.
 #### Prompt bar
-The prompt bar consists of a text field and a button labeled GO. A prompt is entered into the text field and the image will be generated as soon as the button is pressed.
+The prompt bar consists of a text field and a start / stop toggle button. A prompt is entered into the text field and the image will be generated as soon as the button is pressed. To stop, press the button again.
 The button also serves as the GUI's state:
 |Color |State |
 |-|:-|
-|Green| The model is ready and is waiting to be started |
+|Green| The model is ready and waiting to be started |
 |Yellow| The model is currently generating an image |
 |Red| An error occured |
+#### Progress bar
+The progress bar shows the progress of the two stages from left to right.
 #### Settings panel
 The settings panel contains a few option for generating an image:
 |Setting |Description |
