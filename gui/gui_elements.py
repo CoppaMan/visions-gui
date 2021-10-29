@@ -20,14 +20,16 @@ class VisionGUI:
         self.window = tk.Tk()
         self.window.configure(bg='#222222')
         self.window.title("Visions GUI")
-        #self.window.iconbitmap('icon.ico')
+        try:
+            self.window.iconbitmap('icon.ico')
+        except:
+            self.logger.error('WM not supporting icons')
         try:
             self.window.attributes('-type', 'dialog')
         except:
-            pass
+            self.logger.error('WM not supporting floating window')
         self.backend = FourierVisions
         self.model = None
-        self.model_done = True
 
         self.image_viewer = ImageViewer(self)
         self.prompt_bar = PromptBar(self)
@@ -79,7 +81,7 @@ class ImageViewer(tk.Frame):
         except Exception as e:
             self.logger.error('Cannot load image: %s', e)
 
-        if not self.source_window.model_done:
+        if self.source_window.model is not None:
             self.after(2000, self.update_image)
 
 
@@ -89,10 +91,11 @@ class PromptBar(tk.Frame):
         self.source_window = source_window
 
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.lock = threading.Lock()
 
         #self.browse = Button(self, text="AI Art", font='Arial 12 bold', bg='#55dd00', borderwidth=0, highlightthickness=0, command=self.toggle_art)
         self.text_entry = Entry(self, font='Arial 12 bold', borderwidth=0, highlightthickness=0, insertbackground='#dddddd', fg='#dddddd', bg='#666666', justify='center')
-        self.button = Button(self, text="GO", font='Arial 12 bold', width=5, borderwidth=0, highlightthickness=0, command=self.start_generation, fg='#dddddd')
+        self.button = Button(self, text="Start", font='Arial 12 bold', width=5, borderwidth=0, highlightthickness=0, command=self.activate, fg='#dddddd')
         self.set_ready()
 
         self.button.pack(side='right')
@@ -100,43 +103,51 @@ class PromptBar(tk.Frame):
         self.text_entry.grid_rowconfigure(0, weight=1)
         #self.browse.pack(side='right')
 
-    def start_generation(self):
-        if len(self.get_prompt()) == 0:
-            self.set_error()
-            self.logger.error('Prompt cannot be empty')
-            return
-        else:
-            self.set_running()
+    def activate(self):
+        with self.lock:
+            if self.source_window.model is None:            
+                if len(self.get_prompt()) == 0:
+                    self.set_error_empty()
+                    self.logger.error('Prompt cannot be empty')
+                    return
 
-        if self.source_window.model:
-            self.logger.info('Shutting down existing model')
-            self.source_window.model.stop()
+                self.set_running()
+                self.source_window.window.update()
 
-        self.logger.debug('Loading settings')
-        settings = self.source_window.settings_panel.get_settings()
-        print(settings)
-        
-        self.logger.debug('Instanciate new model')
-        self.source_window.model = settings['backend']()
+                self.logger.info('Starting run')
 
-        self.source_window.model.set_texts(self.get_prompt())
-        self.source_window.model.set_image_detail(settings['cycles_s1'], settings['cycles_s2'])
-        self.source_window.model.set_seed(settings['seed'])
-        self.source_window.model.set_save_interval(settings['save_every'])
+                settings = self.source_window.settings_panel.get_settings()
+                self.logger.info('Settings: %s', settings)
+                
+                self.logger.debug('Instanciate new model')
+                self.source_window.model = settings['backend']()
 
-        self.source_window.model.start()
-        self.source_window.window.title("Visions GUI - " + self.get_prompt())
-        self.source_window.model_progress.start(settings['cycles_s1'], settings['cycles_s2'])
-        self.source_window.image_viewer.start('images/' + self.get_prompt().replace(' ', '_') + '.png')
+                self.source_window.model.set_texts(self.get_prompt())
+                self.source_window.model.set_image_detail(settings['cycles_s1'], settings['cycles_s2'])
+                self.source_window.model.set_seed(settings['seed'])
+                self.source_window.model.set_save_interval(settings['save_every'])
+
+                self.source_window.model.start()
+                self.source_window.window.title("Visions GUI - " + self.get_prompt())
+
+                self.source_window.model_progress.start(settings['cycles_s1'], settings['cycles_s2'])
+                self.source_window.image_viewer.start('images/' + self.get_prompt().replace(' ', '_') + '.png')
+            
+            else:
+                self.logger.info('Stopping run')
+                
+                self.source_window.model.stop()
+                self.source_window.model = None
+                self.set_ready()
 
     def set_ready(self):
-        self.button.configure(bg='#679c2a', activebackground='#679c2a', activeforeground='#dddddd', state='normal')
+        self.button.configure(text='Start', bg='#679c2a', activebackground='#679c2a', activeforeground='#dddddd', state='normal')
 
     def set_running(self):
-        self.button.configure(bg='#9c962a', activebackground='#9c962a', activeforeground='#dddddd')
+        self.button.configure(text='Stop', bg='#9c962a', activebackground='#9c962a', activeforeground='#dddddd')
 
-    def set_error(self):
-        self.button.configure(bg='#9c2a2a', activebackground='#9c2a2a', activeforeground='#dddddd', state='disabled')
+    def set_error_empty(self):
+        self.button.configure(text='Empty', bg='#9c2a2a', activebackground='#9c2a2a', activeforeground='#dddddd', state='disabled')
         self.after(1000, self.set_ready)
 
     def get_prompt(self):
@@ -168,7 +179,6 @@ class ModelProgress(tk.Frame):
         self.stage_one.configure(maximum = cycles_s1)
         self.stage_two.configure(maximum = cycles_s2)
 
-        self.source_window.model_done = False
         self.update_progress()
 
     def update_progress(self):
@@ -180,10 +190,9 @@ class ModelProgress(tk.Frame):
         self.stage_one['value'] = progress[0]
         self.stage_two['value'] = progress[1]
 
-        if progress[1] < self.cycles_s2:
+        if progress[1] < self.cycles_s2 and self.source_window.model is not None:
             self.after(1000, self.update_progress)
         else:
-            self.source_window.model_done = True
             self.source_window.prompt_bar.set_ready()
 
 
