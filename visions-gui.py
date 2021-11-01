@@ -1,6 +1,6 @@
 import os
 import logging
-from gui.gui_elements import VisionGUI
+from gui.gui_modules import VisionGUI
 
 logging.basicConfig(level=logging.DEBUG)
 

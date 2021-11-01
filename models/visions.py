@@ -77,9 +77,9 @@ class VisionsBackend(ThreadedWorker):
 
         self.calc_perceptors()
 
-    def set_image_detail(self, stage1, stage2):
-        self.stages[0]['cycles'] = stage1
-        self.stages[1]['cycles'] = stage2
+    def set_image_detail(self, *cycles):
+        for n, cycle in enumerate(cycles):
+            self.stages[n]['cycles'] = cycle
 
     def set_seed(self, seed=None):
         if seed is not None:
@@ -118,7 +118,7 @@ class VisionsBackend(ThreadedWorker):
         )
 
 
-class PiramidVisions(VisionsBackend):
+class PyramidVisions(VisionsBackend):
     def __init__(self):
         VisionsBackend.__init__(self)
 
@@ -763,12 +763,11 @@ class FourierVisions(VisionsBackend):
         self.resample_image_prompts = False
 
         # Size of the smallest pyramid layer
-        aspect_ratio = (3,4)#(3, 4)
+        self.aspect_ratio = (3, 4)
 
         # Max dim of the final output image.
-        max_dim = 1024
-        scale = max_dim // max(aspect_ratio)
-        self.dims = (int(aspect_ratio[0] * scale), int(aspect_ratio[1] * scale))
+        self.max_dim = 1024
+        self.set_scale(1)
 
         self.stages = (
             { #First stage does rough detail. It's going to look really coherent but blurry
@@ -806,6 +805,11 @@ class FourierVisions(VisionsBackend):
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
         self.calc_perceptors()
+
+    def set_scale(self, factor):
+        scale = (self.max_dim*factor) // max(self.aspect_ratio)
+        self.dims = (int(self.aspect_ratio[0] * scale), int(self.aspect_ratio[1] * scale))
+        self.eq = self.generate_filter(self.dims, self.eq_pow, self.eq_min)
         
     def generate_filter(self, dims, eq_pow, eq_min):
         eqx = torch.fft.fftfreq(dims[0])

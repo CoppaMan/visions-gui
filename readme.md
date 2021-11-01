@@ -38,19 +38,20 @@ The button also serves as the GUI's state:
 |Yellow| The model is currently generating an image |
 |Red| An error occured |
 #### Progress bar
-The progress bar shows the progress of the two stages from left to right.
+The progress bar shows the progress of all stages.
 #### Settings panel
-The settings panel contains a few option for generating an image:
+The settings panel contains a few option for generating an image. Not all settings are available for all models:
 |Setting |Description |
 |-|:-|
 |Save every| Cycles completed before displaying and saving the next image. Lower values add more overhead. |
+|Scale| Changes the size of the output image. |
 |Rough cycles| Cycles during the first stage. |
 |Fine cycles| Cycles during the second stage. |
-|Seed| If a random or fixed seed is used. |
+|Seed| If a random or fixed seed is used. If fixed is selected, uses the the seed entered in the entry field to the right. |
 |Backend| Which model to use |
 
 ## Future stuff
 - [ ] Add DirectVisions
 - [ ] UI support for multiple text / weight pairs
-- [ ] UI support for variable image sizes
+- [x] UI support for variable image sizes
 - [ ] Compiled executables
