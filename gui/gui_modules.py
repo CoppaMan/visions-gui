@@ -10,8 +10,7 @@ from tkinter import Button, Entry, Scale, Label
 from tkinter.ttk import Progressbar
 from PIL import ImageTk, Image, UnidentifiedImageError
 
-from models.visions import PyramidVisions, FourierVisions, CLIPCPPN
-from gui.model_settings import PyramidSettings, FourierSettings, CLIPCPPNSettings
+from gui.model_settings import SettingsPanel, PyramidSettings, FourierSettings
 
 from gui.gui_elements import Slider, Selector
 
@@ -31,7 +30,6 @@ class VisionGUI:
             self.window.attributes('-type', 'dialog')
         except:
             self.logger.error('WM not supporting floating window')
-        self.backend = FourierVisions
         self.model = None
 
         self.image_viewer = ImageViewer(self)
@@ -216,13 +214,15 @@ class SettingsManager():
         self.frame = tk.Frame(source_window.window)
         self.source_window = source_window
 
+        self.logger = logging.getLogger(self.__class__.__name__)
+
         self.selected = None
 
         self.panels = {
-            PyramidVisions: PyramidSettings(self.frame),
-            FourierVisions: FourierSettings(self.frame),
-            CLIPCPPN: CLIPCPPNSettings(self.frame)
+            settings_classes.backend: settings_classes(self.frame) for settings_classes in SettingsPanel.__subclasses__()
         }
+
+        self.logger.info('Loaded settings: %s', self.panels)
 
     def pack(self, **kwargs):
         self.frame.pack(kwargs)
@@ -301,9 +301,7 @@ class BackendSelector(tk.Frame):
             'Backend',
             'backend',
             [
-                ('PyramidVisions', PyramidVisions),
-                ('FourierVisions', FourierVisions),
-                ('CLIP + CPPN', CLIPCPPN)
+                (backend.__name__, backend) for backend in self.source_window.settings_panel.panels
             ],
             command = self.update_settings
         )

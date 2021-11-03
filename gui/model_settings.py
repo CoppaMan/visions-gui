@@ -1,9 +1,13 @@
 from tkinter import Frame
 
+from models.visions import PyramidVisions, FourierVisions
+
 from gui.gui_elements import Slider
 
 
 class SettingsPanel(Frame):
+    backend = None
+
     def __init__(self, frame):
         Frame.__init__(self, frame, bg='#222222')
         self.options = {}
@@ -24,6 +28,8 @@ class SettingsPanel(Frame):
 
 
 class PyramidSettings(SettingsPanel):
+    backend = PyramidVisions
+
     def __init__(self, frame):
         SettingsPanel.__init__(self, frame)
         self.options = [
@@ -41,6 +47,8 @@ class PyramidSettings(SettingsPanel):
 
 
 class FourierSettings(SettingsPanel):
+    backend = FourierVisions
+    
     def __init__(self, frame):
         SettingsPanel.__init__(self, frame)
         self.options = [
@@ -59,6 +67,7 @@ class FourierSettings(SettingsPanel):
         model.save_interval = options['save_interval']
 
 
+'''
 class CLIPCPPNSettings(SettingsPanel):
     def __init__(self, frame):
         SettingsPanel.__init__(self, frame)
@@ -68,3 +77,4 @@ class CLIPCPPNSettings(SettingsPanel):
             Slider(self, 'Fine cycles', 'cycles', 100, 5000, steps=100, default=1000)
         ]
         self.pack_options()
+'''
