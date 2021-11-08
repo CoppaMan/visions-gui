@@ -180,9 +180,8 @@ class ModelProgress(tk.Frame):
             bar.grid_forget()
 
         self.stages = stages
-        self.bars = [ Progressbar(self, maximum=stage, orient='horizontal', mode='determinate') for stage in stages ]
+        self.bars = [ Progressbar(self, maximum=stage, length=20, orient='horizontal', mode='determinate') for stage in stages ]
         for n, bar in enumerate(self.bars):
-
             padding = [1,1]
             if n == 0:
                 padding[0] = 5
