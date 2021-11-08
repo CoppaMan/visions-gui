@@ -79,6 +79,7 @@ class VisionsBackend(ThreadedWorker):
 
     def set_image_detail(self, *cycles):
         for n, cycle in enumerate(cycles):
+            print(cycle)
             self.stages[n]['cycles'] = cycle
 
     def set_seed(self, seed=None):
@@ -549,37 +550,41 @@ class PyramidVisions(VisionsBackend):
 
 class DirectVisions(VisionsBackend):
     def __init__(self):
-        chroma_fraction = 1
-        sigmoid_params = True # If you change this you'll have to change the learning rates too... No great way around that.
+        VisionsBackend.__init__(self)
+
+        self.progress = [0]*8
+
+        self.chroma_fraction = 1
+        self.sigmoid_params = True # If you change this you'll have to change the learning rates too... No great way around that.
 
         # Todo: Make this work right with chroma_fraction. Currently only bicubic and bilinear do
         # Bilinear and bicubic resize in param space, lanczos and esrgan in image space
         # ESRGAN doesn't currently work
-        upscaling_mode = "lanczos" #"bilinear" , "bicubic" "lanczos" "esrgan"
+        self.upscaling_mode = "lanczos" #"bilinear" , "bicubic" "lanczos" "esrgan"
 
         # Gaussian noise is normal noise in the sigmoid YCoCv space. Uniform noise is in the RGB space.
-        init_type = "gaussian" # "uniform"
+        self.init_type = "gaussian" # "uniform"
 
         # Grayscale initial noise -- for all noise types
-        greyscale_init = False
+        self.greyscale_init = False
 
         #Params for uniform init noise
-        init_gamma = 1.0 # contrast
-        init_gain = 1.0 # Brightness
+        self.init_gamma = 1.0 # contrast
+        self.init_gain = 1.0 # Brightness
 
         # Params for gaussian init noise
-        chroma_noise_scale = 0.0 # Saturation (0 - 2 is safe but you can go as high as you want)
-        luma_noise_mean = 0.0 # Brightness (-3 to 3 seems safe but around 0 seems to work better)
-        luma_noise_scale = 0.0 # Contrast (0-2 is safe but you can go as high as you want)
-        init_noise_clamp = 8.0 # Turn this down if you're getting persistent super bright or dark spots.
+        self.chroma_noise_scale = 0.0 # Saturation (0 - 2 is safe but you can go as high as you want)
+        self.luma_noise_mean = 0.0 # Brightness (-3 to 3 seems safe but around 0 seems to work better)
+        self.luma_noise_scale = 0.0 # Contrast (0-2 is safe but you can go as high as you want)
+        self.init_noise_clamp = 8.0 # Turn this down if you're getting persistent super bright or dark spots.
 
         # display_size = ( 640, 480, )
-        warmup_its = 50
+        self.warmup_its = 50
 
-        resample_image_prompts = False
+        self.resample_image_prompts = False
 
-        aspect_ratio = (3, 4)#(4, 3)
-        display_size = [i * 160 for i in aspect_ratio]
+        self.aspect_ratio = (3, 4)#(4, 3)
+        self.display_size = [i * 160 for i in self.aspect_ratio]
 
         self.stages = (
                     {
@@ -741,9 +746,343 @@ class DirectVisions(VisionsBackend):
 
         for stage in self.stages:
             if "dim" not in stage:
-                stage["dim"] = (aspect_ratio[0] * stage["scale"], aspect_ratio[1] * stage["scale"])
+                stage["dim"] = (self.aspect_ratio[0] * stage["scale"], self.aspect_ratio[1] * stage["scale"])
 
         debug_clip_cuts = False
+
+        self.bilinear = torchvision.transforms.functional.InterpolationMode.BILINEAR
+        self.bicubic = torchvision.transforms.functional.InterpolationMode.BICUBIC
+
+        torch.autograd.set_grad_enabled(False)
+        torch.backends.cudnn.benchmark = True
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+
+        self.perceptors = (
+            self.loadPerceptor("ViT-B/32"),
+            self.loadPerceptor("ViT-B/16"),
+            # loadPerceptor("RN50x16"),
+        )
+
+    def normalize_image(self, image):
+        R = (image[:,0:1] - 0.48145466) /  0.26862954
+        G = (image[:,1:2] - 0.4578275) / 0.26130258 
+        B = (image[:,2:3] - 0.40821073) / 0.27577711
+        return torch.cat((R, G, B), dim=1)
+
+    @torch.no_grad()
+    def loadImage(self, filename):
+        data = open(filename, "rb").read()
+        image = torch.ops.image.decode_png(torch.as_tensor(bytearray(data)).cpu().to(torch.uint8), 3).cuda().to(torch.float32) / 255.0
+        # image = normalize_image(image)
+        return image.unsqueeze(0).cuda()
+
+    def getClipTokens(self, image, cuts, noise, do_checkin, perceptor):
+        im = self.normalize_image(image)
+        cut_data = torch.zeros(cuts, 3, perceptor["size"], perceptor["size"])
+        for c in range(cuts):
+            angle = random.uniform(-20.0, 20.0)
+            img = torchvision.transforms.functional.rotate(im, angle=angle, expand=True, interpolation=self.bilinear)
+
+            padv = im.size()[2] // 8
+            img = torch.nn.functional.pad(img, pad=(padv, padv, padv, padv))
+
+            size = img.size()[2:4]
+            mindim = min(*size)
+
+            if mindim <= perceptor["size"]-32:
+                width = mindim - 1
+            else:
+                width = random.randint( perceptor["size"]-32, mindim-1 )
+
+            oy = random.randrange(0, size[0]-width)
+            ox = random.randrange(0, size[1]-width)
+            img = img[:,:,oy:oy+width,ox:ox+width]
+
+            if self.pixel_art:
+                img = torch.nn.functional.interpolate(img, size=(perceptor["size"], perceptor["size"]), mode='nearest')
+            else:
+                img = torch.nn.functional.interpolate(img, size=(perceptor["size"], perceptor["size"]), mode='bilinear', align_corners=False)
+            cut_data[c] = img
+
+        cut_data += noise * torch.randn_like(cut_data, requires_grad=False)
+
+        #if debug_clip_cuts and do_checkin:
+        #    displayImage(cut_data)
+
+        clip_tokens = perceptor['model'].encode_image(cut_data)
+        return clip_tokens
+
+    @torch.no_grad()
+    def saveImage(self, image, filename):
+        # R = image[:,0:1] * 0.26862954 + 0.48145466
+        # G = image[:,1:2] * 0.26130258 + 0.4578275
+        # B = image[:,2:3] * 0.27577711 + 0.40821073
+        # image = torch.cat((R, G, B), dim=1)
+        size = image.size()
+
+        image = (image[0].clamp(0, 1) * 255).to(torch.uint8)
+        png_data = torch.ops.image.encode_png(image.cpu(), 6)
+        open(filename, "wb").write(bytes(png_data))
+
+    # TODO: Use torchvision normalize / unnormalize
+    def unnormalize_image(self, image):
+        
+        R = image[:,0:1] * 0.26862954 + 0.48145466
+        G = image[:,1:2] * 0.26130258 + 0.4578275
+        B = image[:,2:3] * 0.27577711 + 0.40821073
+        
+        return torch.cat((R, G, B), dim=1)
+
+    def paramsToImage(self, param_luma, param_chroma):
+        if self.chroma_fraction == 1:
+            CoCg = param_chroma
+        else:
+            CoCg = torch.nn.functional.interpolate(param_chroma, size=(param_luma.size()[2:4]), mode='bilinear', align_corners=False)
+        if self.sigmoid_params:
+            luma = torch.sigmoid(param_luma)
+            CoCg = torch.sigmoid(CoCg) * 2 - 1
+        else:
+            luma = param_luma
+        Co = CoCg[:,0]
+        Cg = CoCg[:,1]
+
+        tmp = luma - Cg/2
+        G = Cg + tmp
+        B = tmp - Co/2
+        R = B + Co
+        im_torch = torch.cat((R, G, B), dim=1)#.clamp(0,1)
+        return im_torch
+
+    def imageToParams(self, image):
+        image = image#.clamp(0,1)
+        R, G, B = image[:,0:1], image[:,1:2], image[:,2:3]
+        luma = R * 0.25 + G * 0.5 + B * 0.25
+        Co = R  - B
+        tmp = B + Co / 2
+        Cg = G - tmp
+        luma = tmp + Cg / 2
+
+        nsize = luma.size()[2:4]
+        if self.chroma_fraction == 1:
+            chroma =  torch.cat([Co,Cg], dim=1)
+        else:
+            chroma = torch.nn.functional.interpolate(torch.cat((Co,Cg), dim=1), size=(nsize[0]//self.chroma_fraction, nsize[1]//self.chroma_fraction), mode='bilinear', align_corners=False)
+        if self.sigmoid_params:
+            chroma = torch.logit((chroma / 2.0 + 0.5), eps=1e-8)
+            luma = torch.logit(luma, eps=1e-8)
+        return luma, chroma 
+
+    def normalizeParams(self, param_luma, param_chroma):
+        # image = paramsToImage(param_luma, param_chroma)  
+        # image[:,0] = image[:,0].clamp(0,1)#(-1.79226, 1.93034)
+        # image[:,1] = image[:,1].clamp(0,1)#(-1.7521, 2.07488)
+        # image[:,2] = image[:,2].clamp(0,1)#(-1.48022, 2.1459)
+        # luma, chroma = imageToParams(image)
+        param_luma = param_luma.clamp(0,1)
+        param_chroma = param_chroma.clamp(-0.5, 0.5)
+
+    @torch.no_grad()
+    def displayImage(self, image):
+        # image = unnormalize_image(image)
+        size = image.size()
+
+        width = size[0] * size[3] + (size[0]-1) * 4
+        image_row = torch.zeros( size=(3, size[2], width), dtype=torch.uint8 )
+
+        nw = 0
+        for n in range(size[0]):
+            image_row[:,:,nw:nw+size[3]] = (image[n,:].clamp(0, 1) * 255).to(torch.uint8)
+            nw += size[3] + 4
+
+        jpeg_data = torch.ops.image.encode_png(image_row.cpu(), 6)
+        image = display.Image(bytes(jpeg_data))
+        display.display( image )
+
+    def lossClip(self, image, cuts, noise, do_checkin):
+        losses = []
+
+        max_loss = 0.0
+        for text in self.texts:
+            max_loss += abs(text["weight"]) * len(self.perceptors)
+        for img in self.images:
+            max_loss += abs(img["weight"]) * len(self.perceptors)
+
+        for perceptor in self.perceptors:
+            clip_tokens = self.getClipTokens(image, cuts, noise, do_checkin, perceptor)
+            for t, tokens in enumerate( perceptor["tokens"] ):
+                similarity = torch.cosine_similarity(tokens, clip_tokens)
+                weight = self.texts[t]["weight"]
+                if weight > 0.0:
+                    loss = (1.0 - similarity) * weight
+                else:
+                    loss = similarity * (-weight)
+                losses.append(loss / max_loss)
+
+            for img in self.images:
+                for i, prompt_image in enumerate(perceptor["images"]):
+                    if self.resample_image_prompts:
+                        img_tokens = self.getClipTokens(prompt_image, self.images[i]["cuts"], self.images[i]["noise"], False, perceptor)
+                    else:
+                        img_tokens = prompt_image
+                    weight = self.images[i]["weight"] / float(self.images[i]["cuts"])
+                    for token in img_tokens:
+                        similarity = torch.cosine_similarity(token.unsqueeze(0), clip_tokens)
+                        if weight > 0.0:
+                            loss = (1.0 - similarity) * weight
+                        else:
+                            loss = similarity * (-weight)
+                        losses.append(loss / max_loss)
+
+        return losses
+
+    def lossTV(self, image, strength):
+        Y = (image[:,:,1:,:] - image[:,:,:-1,:]).abs().mean()
+        X = (image[:,:,:,1:] - image[:,:,:,:-1]).abs().mean()
+        loss = (X + Y) * 0.5 * strength
+        return loss
+
+    def cycle(self, c, stage, optimizer, param_luma, param_chroma):
+        do_checkin = (c+1) % stage["checkin_interval"] == 0 or c == 0
+        # param_luma += torch.randn_like(param_luma) * 0.01
+        # param_chroma += torch.randn_like(param_chroma) * 0.01
+        with torch.enable_grad():
+            image = self.paramsToImage(param_luma, param_chroma)
+
+            losses = []
+            losses += self.lossClip( image, stage["cuts"], stage["noise"], do_checkin )
+            losses += [self.lossTV( image, stage["denoise"] )]
+
+            loss_total = sum(losses).sum()
+            optimizer.zero_grad(set_to_none=True)
+            loss_total.backward(retain_graph=False)
+            if c <= self.warmup_its:
+                optimizer.param_groups[0]["lr"] = stage["lr_luma"] * c / self.warmup_its
+                optimizer.param_groups[1]["lr"] = stage["lr_chroma"] * c / self.warmup_its
+            optimizer.step()
+            # direction = (stage["n"] % 2 * 2 - 1, (stage["n"] // 2)  % 2 * 2 - 1)
+            # print(direction)
+            # param_luma.data = torch.roll(param_luma.data, direction, dims = (2,3))
+            # param_chroma.data = torch.roll(param_chroma.data, direction, dims = (2,3))
+
+            # normalizeParams(param_luma, param_chroma)
+
+        if c % self.save_interval == 0:
+            TV = losses[-1].sum().item()
+            print( "Cycle:", str(stage["n"]) + ":" + str(c), "CLIP Loss:", loss_total.item() - TV, "TV loss:", TV)
+            nimg = self.paramsToImage(param_luma, param_chroma)
+
+            #if True:#pixel_art:
+            #    displayImage(torch.nn.functional.interpolate(nimg, size=self.display_size, mode='nearest'))
+            #else:
+            #    displayImage(torch.nn.functional.interpolate(nimg, size=self.display_size, mode='bicubic', align_corners=True))
+            
+            self.saveImage(nimg, 'images/' + self.texts[0]["text"].replace(' ', '_') + ".png" )
+
+    def sinc(self, x):
+        return torch.where(x != 0, torch.sin(math.pi * x) / (math.pi * x), x.new_ones([]))
+
+    def lanczos(self, x, a):
+        cond = torch.logical_and(-a < x, x < a)
+        out = torch.where(cond, self.sinc(x) * self.sinc(x/a), x.new_zeros([]))
+        return out / out.sum()
+
+    def ramp(self, ratio, width):
+        n = math.ceil(width / ratio + 1)
+        out = torch.empty([n])
+        cur = 0
+        for i in range(out.shape[0]):
+            out[i] = cur
+            cur += ratio
+        return torch.cat([-out[1:].flip([0]), out])[1:-1]
+
+    def resample(self, input, size, align_corners=True):
+        print(input)
+        n, c, h, w = input.shape
+        dh, dw = size
+
+        input = input.reshape([n * c, 1, h, w])
+
+        # if dh < h:
+        kernel_h = self.lanczos(self.ramp(dh / h, 2), 2).to(input.device, input.dtype)
+        pad_h = (kernel_h.shape[0] - 1) // 2
+        input = torch.nn.functional.pad(input, (0, 0, pad_h, pad_h), 'reflect')
+        input = torch.nn.functional.conv2d(input, kernel_h[None, None, :, None])
+
+        # if dw < w:
+        kernel_w = self.lanczos(self.ramp(dw / w, 2), 2).to(input.device, input.dtype)
+        pad_w = (kernel_w.shape[0] - 1) // 2
+        input = torch.nn.functional.pad(input, (pad_w, pad_w, 0, 0), 'reflect')
+        input = torch.nn.functional.conv2d(input, kernel_w[None, None, None, :])
+
+        input = input.reshape([n, c, h, w])
+        return torch.nn.functional.interpolate(input, size, mode='bicubic', align_corners=align_corners)
+
+    def function(self):
+        if self.initial_image is not None:
+            image = self.loadImage(self.initial_image)
+            image = torch.nn.functional.interpolate(image, size=self.stages[0]['dim'], mode='bicubic', align_corners=False)
+            luma, chroma = self.imageToParams(image)
+        elif self.init_type == "uniform":
+            channels = 1 if self.greyscale_init else 3
+            image = torch.rand(size = (1,channels,self.stages[0]['dim'][0], self.stages[0]['dim'][1]))
+            if self.greyscale_init:
+                image = image.expand(-1,3,-1,-1)
+            image = torch.pow(image, self.init_gamma) * self.init_gain
+            # image = normalize_image(image)
+            luma, chroma = self.imageToParams(image)
+        elif self.init_type == "gaussian":
+            luma = torch.randn(size = (1,1,self.stages[0]['dim'][0], self.stages[0]['dim'][1]))  * self.luma_noise_scale + self.luma_noise_mean
+            if self.greyscale_init:
+                chroma = torch.zeros(size = (1,2,self.stages[0]['dim'][0], self.stages[0]['dim'][1]))
+            else:
+                chroma = torch.randn(size = (1,2,self.stages[0]['dim'][0], self.stages[0]['dim'][1])) * self.chroma_noise_scale
+            luma = luma.clamp(-self.init_noise_clamp, self.init_noise_clamp)
+            chroma = chroma.clamp(-self.init_noise_clamp, self.init_noise_clamp)
+
+        param_luma = torch.nn.parameter.Parameter( luma.cuda(), requires_grad=True)
+        param_chroma = torch.nn.parameter.Parameter( chroma.cuda(), requires_grad=True )
+        # else:
+        #   im = torch.randn(size=1,1,)
+        #   param_luma = torch.nn.parameter.Parameter( 0.1 * torch.randn(size=(1, 1, stages[0]['dim'][0], stages[0]['dim'][1] ), requires_grad=False), requires_grad=True )
+        #   param_chroma = torch.nn.parameter.Parameter( 0.1 * torch.randn(size=(1, 2, stages[0]['dim'][0]//chroma_fraction, stages[0]['dim'][1]//chroma_fraction ), requires_grad=False), requires_grad=True )
+
+        # normalizeParams(param_luma, param_chroma)
+        params = (
+        {"params":param_luma, "lr":self.stages[0]["lr_luma"], "weight_decay":self.stages[0]["decay_luma"]},
+        {"params":param_chroma, "lr":self.stages[0]["lr_chroma"], "weight_decay":self.stages[0]["decay_chroma"]},
+        )
+        optimizer = torch.optim.AdamW(params)
+
+        for n, stage in enumerate(self.stages):
+            stage["n"] = n
+            if n > 0:
+                if stage['dim'][0] != param_luma.shape[2]:
+                    if self.upscaling_mode == "lanczos":
+                        luma = self.resample(param_luma, ( stage['dim'][0], stage['dim'][1] ))
+                        chroma = self.resample(param_chroma, ( stage['dim'][0], stage['dim'][1] )) 
+                        param_luma = torch.nn.parameter.Parameter( luma.cuda(), requires_grad=True )
+                        param_chroma = torch.nn.parameter.Parameter( chroma.cuda(), requires_grad=True )
+                    else:
+                        param_luma = torch.nn.parameter.Parameter(torch.nn.functional.interpolate(param_luma.data, size=( stage['dim'][0], stage['dim'][1] ), mode=self.upscaling_mode, align_corners=False), requires_grad=True ).cuda()
+                        param_chroma = torch.nn.parameter.Parameter(torch.nn.functional.interpolate(param_chroma.data, size=( stage['dim'][0]//self.chroma_fraction, stage['dim'][1]//self.chroma_fraction ), mode=self.upscaling_mode, align_corners=False), requires_grad=True ).cuda()
+                print(type(param_luma))
+                # TODO: Readd noise scaling, currently not working on current torch version
+                if "init_noise" in stage:
+                    param_luma = torch.tensor.new_tensor(torch.randn_like(param_luma)*stage["init_noise"])
+                #    param_luma = param_luma + torch.randn_like(param_luma) * stage["init_noise"]
+                #    param_chroma = param_chroma + torch.randn_like(param_chroma) * stage["init_noise"]
+                params = (
+                    {"params":param_luma, "lr":stage["lr_luma"], "weight_decay":stage["decay_luma"]},
+                    {"params":param_chroma, "lr":stage["lr_chroma"], "weight_decay":stage["decay_chroma"]}
+                )
+                optimizer = torch.optim.AdamW(params)
+
+            print(stage["cycles"])
+            for c in range(stage["cycles"]):
+                if self.stop_signal:
+                    return
+                self.cycle( c, stage, optimizer, param_luma, param_chroma)
+                self.progress[n] = c+1
 
 
 class FourierVisions(VisionsBackend):
