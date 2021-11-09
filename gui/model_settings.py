@@ -55,7 +55,7 @@ class DirectSettings(SettingsPanel):
     def __init__(self, frame):
         SettingsPanel.__init__(self, frame)
         self.options = [
-            Slider(self, 'Save every', 'save_interval', 20, 1000, steps=20, default=200),
+            Slider(self, 'Save every', 'save_interval', 20, 1000, steps=20, default=100),
             Slider(self, 'Stage 1', 'cycles', 100, 5000, steps=100, default=500),
             Slider(self, 'Stage 2', 'cycles', 100, 5000, steps=100, default=500),
             Slider(self, 'Stage 3', 'cycles', 100, 5000, steps=100, default=500),

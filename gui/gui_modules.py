@@ -5,6 +5,7 @@ import subprocess
 import threading
 import logging
 
+from math import floor
 import tkinter as tk
 from tkinter import Button, Entry, Scale, Label
 from tkinter.ttk import Progressbar
@@ -80,7 +81,14 @@ class ImageViewer(tk.Frame):
     def update_image(self):
         try:
             self.logger.debug('Refreshing image at %s', self.path)
-            self.img = ImageTk.PhotoImage(Image.open(self.path))
+            image = Image.open(self.path)
+            size = image.size
+            if size[0] < 500:
+                scale = 500 / size[0]
+                new_size = (floor(size[0]*scale), floor(size[1]*scale))
+                print(new_size)
+                image = image.resize(new_size, Image.BOX)
+            self.img = ImageTk.PhotoImage(image)
             self.tkimg.configure(image=self.img)
             self.tkimg.image = self.img
         except Exception as e:
