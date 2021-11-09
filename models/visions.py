@@ -1039,6 +1039,8 @@ class DirectVisions(VisionsBackend):
             luma = luma.clamp(-self.init_noise_clamp, self.init_noise_clamp)
             chroma = chroma.clamp(-self.init_noise_clamp, self.init_noise_clamp)
 
+        print(luma)
+
         param_luma = torch.nn.parameter.Parameter( luma.cuda(), requires_grad=True)
         param_chroma = torch.nn.parameter.Parameter( chroma.cuda(), requires_grad=True )
         # else:
@@ -1066,11 +1068,13 @@ class DirectVisions(VisionsBackend):
                         param_luma = torch.nn.parameter.Parameter(torch.nn.functional.interpolate(param_luma.data, size=( stage['dim'][0], stage['dim'][1] ), mode=self.upscaling_mode, align_corners=False), requires_grad=True ).cuda()
                         param_chroma = torch.nn.parameter.Parameter(torch.nn.functional.interpolate(param_chroma.data, size=( stage['dim'][0]//self.chroma_fraction, stage['dim'][1]//self.chroma_fraction ), mode=self.upscaling_mode, align_corners=False), requires_grad=True ).cuda()
                 print(type(param_luma))
-                # TODO: Readd noise scaling, currently not working on current torch version
                 if "init_noise" in stage:
-                    param_luma = torch.tensor.new_tensor(torch.randn_like(param_luma)*stage["init_noise"])
-                #    param_luma = param_luma + torch.randn_like(param_luma) * stage["init_noise"]
-                #    param_chroma = param_chroma + torch.randn_like(param_chroma) * stage["init_noise"]
+                    new_luma = param_luma + torch.randn_like(param_luma) * stage["init_noise"]
+                    param_luma = torch.nn.parameter.Parameter( new_luma.cuda(), requires_grad=True)
+
+                    new_chroma = param_chroma + torch.randn_like(param_chroma) * stage["init_noise"]
+                    param_chroma = torch.nn.parameter.Parameter( new_chroma.cuda(), requires_grad=True)
+
                 params = (
                     {"params":param_luma, "lr":stage["lr_luma"], "weight_decay":stage["decay_luma"]},
                     {"params":param_chroma, "lr":stage["lr_chroma"], "weight_decay":stage["decay_chroma"]}

@@ -78,7 +78,7 @@ Define a method called `apply_options(self, model)` accepting an instance of you
 
 
 ## Future stuff
-- [ ] Add DirectVisions
+- [x] Add DirectVisions
 - [ ] UI support for multiple text / weight pairs
 - [x] UI support for variable image sizes
 - [ ] Compiled executables
