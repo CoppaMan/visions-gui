@@ -13,7 +13,7 @@ from PIL import ImageTk, Image, UnidentifiedImageError
 
 from gui.model_settings import SettingsPanel, PyramidSettings, FourierSettings
 
-from gui.gui_elements import Slider, Selector
+from gui.gui_elements import Slider, Selector, ExtraPrompts
 
 
 class VisionGUI:
@@ -35,6 +35,7 @@ class VisionGUI:
 
         self.image_viewer = ImageViewer(self)
         self.prompt_bar = PromptBar(self)
+        self.extra_prompt = ExtraPrompts(self)
         self.model_progress = ModelProgress(self)
         self.settings_panel = SettingsManager(self)
         self.seed_control = SeedControl(self)
@@ -42,6 +43,7 @@ class VisionGUI:
 
         self.image_viewer.pack(side='top', expand=True, fill='x')
         self.prompt_bar.pack(side='top', expand=True, fill='x')
+        self.extra_prompt.pack(side='top', expand=True, fill='x')
         self.model_progress.pack(side='top', expand=True, fill='x')
         self.settings_panel.pack(side='top', expand=True, fill='x')
         self.seed_control.pack(side='top', expand=True, fill='x')
@@ -135,6 +137,7 @@ class PromptBar(tk.Frame):
                 # Set global model options
                 self.source_window.model.set_texts(self.get_prompt())
                 self.source_window.model.set_seed(self.source_window.seed_control.get_seed())
+                self.source_window.model.set_weighted_prompts(self.source_window.extra_prompt.get_weighted_prompts())
 
                 # Model specific options
                 self.source_window.settings_panel.apply_settings(self.source_window.model)
@@ -203,17 +206,23 @@ class ModelProgress(tk.Frame):
 
     def update_progress(self):
         self.logger.debug('Updating progress bar')
-        
+
+        if self.source_window.model is None:
+            self.source_window.model = None
+            self.source_window.prompt_bar.set_ready()
+            return
+
         progress = self.source_window.model.progress
         for n, bar in enumerate(self.bars):
             bar['value'] = progress[n]
-
-        if progress[-1] < self.stages[-1] and self.source_window.model is not None:
+        if progress[-1] < self.stages[-1]:
             self.after(1000, self.update_progress)
         else:
-            if self.source_window.model is not None:
-                self.source_window.model = None
+            print(progress)
+            self.source_window.model = None
             self.source_window.prompt_bar.set_ready()
+
+        
 
 
 class SettingsManager():

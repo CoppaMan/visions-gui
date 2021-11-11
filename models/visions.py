@@ -26,9 +26,6 @@ class VisionsBackend(ThreadedWorker):
             {
                 "text": '',
                 "weight": 1.0,
-            },{ # Not really strong enough to remove all signatures... but I'm ok with small ones
-                "text":"text",
-                "weight":-0.5
             }
         ]
 
@@ -87,6 +84,14 @@ class VisionsBackend(ThreadedWorker):
             random.seed(seed)
             torch.manual_seed(seed)
             np.random.seed(seed)
+
+    def set_weighted_prompts(self, weighted_prompts):
+        for weighted_prompt in weighted_prompts:
+            self.texts.append({
+                "text": weighted_prompt[0],
+                "weight": weighted_prompt[1]
+            })
+        print(self.texts)
 
     def set_save_interval(self, save_interval):
         self.save_interval = save_interval
