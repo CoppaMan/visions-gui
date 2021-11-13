@@ -6,3 +6,4 @@ torchaudio==0.8.2
 -f https://download.pytorch.org/whl/lts/1.8/torch_lts.html
 torch_optimizer
 -e git+https://github.com/openai/clip.git#egg=clip
+deep_daze
