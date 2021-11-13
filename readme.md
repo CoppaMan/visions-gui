@@ -2,9 +2,10 @@
 
 An offline python frontend for the [QuadVisions Colab Notebook](https://colab.research.google.com/drive/1qgMT4-_kDIgZnNGMmrxmwzT3N6Ittw6B?usp=sharing#scrollTo=OOd34BtkuK63) using [tkinter](https://docs.python.org/3/library/tkinter.html).
 It offers basic options and interactively displays the generating image. So far PyramidVisions, FourierVisions and CLIP + CPPN are implemented. Image generation code: Jens Goldberg / [Aransentin](https://https//twitter.com/aransentin), Colab by Philipuss#4066.
+Now features [Deep Daze](https://github.com/lucidrains/deep-daze) by [lucidrains](https://github.com/lucidrains).
 
 ## Installation
-VisionsGUI was tested under Arch Linux and Windows 10 on a NVIDIA RTX 2070 Super. PyramidVisions and FourierVisions require a card with at least 4GB of VRAM, CLIP + CPPN requires more than 8GB. CPU only is currently not supported.
+VisionsGUI was tested under Arch Linux and Windows 10 on a NVIDIA RTX 2070 Super. PyramidVisions, DirectVisions and FourierVisions require a card with at least 4GB of VRAM. The VRAM consumption of Deep Daze is variable and mostly depends on the image size and depth. CLIP + CPPN requires more than 8GB. CPU only is currently not supported.
 ### Dependencies
 Python and CUDA are required, the remaining dependencies can be installed via pip. Using a virtual environment like [venv](https://docs.python.org/3/library/venv.html) is preferred to keep the required pip packages seperate from your existing pip packages.
 #### Arch Linux

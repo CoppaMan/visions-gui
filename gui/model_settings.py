@@ -1,8 +1,9 @@
 from tkinter import Frame
 
 from models.visions import PyramidVisions, DirectVisions, FourierVisions
+from models.lucidrains import DeepDaze
 
-from gui.gui_elements import Slider
+from gui.gui_elements import Slider, ExtraPrompts
 
 
 class SettingsPanel(Frame):
@@ -48,6 +49,10 @@ class PyramidSettings(SettingsPanel):
         model.stages[1]['cycles'] = options['cycles'][1]
         model.save_interval = options['save_interval']
 
+    def get_stages(self):
+        options = self.get_settings()
+        return options['cycles']
+
 
 class DirectSettings(SettingsPanel):
     backend = DirectVisions
@@ -73,6 +78,10 @@ class DirectSettings(SettingsPanel):
             model.stages[n]['cycles'] = options['cycles'][n]
         model.save_interval = options['save_interval']
 
+    def get_stages(self):
+        options = self.get_settings()
+        return options['cycles']
+
 
 class FourierSettings(SettingsPanel):
     backend = FourierVisions
@@ -94,6 +103,36 @@ class FourierSettings(SettingsPanel):
         model.stages[1]['cycles'] = options['cycles'][1]
         model.save_interval = options['save_interval']
 
+    def get_stages(self):
+        options = self.get_settings()
+        return options['cycles']
+
+
+class DazeSettings(SettingsPanel):
+    backend = DeepDaze
+    
+    def __init__(self, frame):
+        SettingsPanel.__init__(self, frame)
+        self.options = [
+            Slider(self, 'Save every', 'save_interval', 10, 100, steps=10, default=20),
+            Slider(self, 'Image size', 'scale', 128, 1024, steps=32, default=256),
+            Slider(self, 'Layers', 'layers', 8, 32, steps=1, default=16),
+            Slider(self, 'Epochs', 'epochs', 1, 10, steps=1, default=5),
+            Slider(self, 'Iterations', 'iterations', 100, 5000, steps=100, default=1000)
+        ]
+        self.pack_options()
+
+    def apply_options(self, model):
+        options = self.get_settings()
+        model.epochs = options['epochs']
+        model.iterations = options['iterations']
+        model.save_interval = options['save_interval']
+        model.image_size = options['scale']
+        model.layers = options['layers']
+
+    def get_stages(self):
+        options = self.get_settings()
+        return [ options['iterations'] ] * options['epochs']
 
 '''
 class CLIPCPPNSettings(SettingsPanel):

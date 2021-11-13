@@ -208,21 +208,19 @@ class ModelProgress(tk.Frame):
         self.logger.debug('Updating progress bar')
 
         if self.source_window.model is None:
-            self.source_window.model = None
             self.source_window.prompt_bar.set_ready()
             return
 
         progress = self.source_window.model.progress
         for n, bar in enumerate(self.bars):
             bar['value'] = progress[n]
-        if progress[-1] < self.stages[-1]:
+
+        if progress[-1] < self.stages[-1] and not self.source_window.model.stop_signal:
             self.after(1000, self.update_progress)
         else:
             print(progress)
             self.source_window.model = None
             self.source_window.prompt_bar.set_ready()
-
-        
 
 
 class SettingsManager():
@@ -250,7 +248,7 @@ class SettingsManager():
         self.selected.pack(side='top', expand=True, fill='x')
 
     def get_stages(self):
-        return self.selected.get_settings()['cycles']
+        return self.selected.get_stages()
 
     def apply_settings(self, model):
         return self.selected.apply_options(model)
