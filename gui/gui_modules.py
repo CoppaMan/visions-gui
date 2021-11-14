@@ -187,8 +187,9 @@ class ModelProgress(tk.Frame):
         pass
 
     def start(self, stages):
-        for bar in self.bars:
+        for n, bar in enumerate(self.bars):
             bar.grid_forget()
+            self.grid_columnconfigure(n, weight=0)
 
         self.stages = stages
         self.bars = [ Progressbar(self, maximum=stage, length=20, orient='horizontal', mode='determinate') for stage in stages ]
