@@ -1,7 +1,7 @@
 from tkinter import Frame
 
 from models.visions import PyramidVisions, DirectVisions, FourierVisions
-from models.lucidrains import DeepDaze
+from models.lucidrains import DeepDaze, BigSleep
 
 from gui.gui_elements import Slider, ExtraPrompts
 
@@ -33,6 +33,7 @@ class SettingsPanel(Frame):
 
 class PyramidSettings(SettingsPanel):
     backend = PyramidVisions
+    group = 'Visions'
 
     def __init__(self, frame):
         SettingsPanel.__init__(self, frame)
@@ -56,6 +57,7 @@ class PyramidSettings(SettingsPanel):
 
 class DirectSettings(SettingsPanel):
     backend = DirectVisions
+    group = 'Visions'
 
     def __init__(self, frame):
         SettingsPanel.__init__(self, frame)
@@ -85,6 +87,7 @@ class DirectSettings(SettingsPanel):
 
 class FourierSettings(SettingsPanel):
     backend = FourierVisions
+    group = 'Visions'
     
     def __init__(self, frame):
         SettingsPanel.__init__(self, frame)
@@ -110,6 +113,7 @@ class FourierSettings(SettingsPanel):
 
 class DazeSettings(SettingsPanel):
     backend = DeepDaze
+    group = 'Lucidrains'
     
     def __init__(self, frame):
         SettingsPanel.__init__(self, frame)
@@ -129,6 +133,32 @@ class DazeSettings(SettingsPanel):
         model.save_interval = options['save_interval']
         model.image_size = options['scale']
         model.layers = options['layers']
+
+    def get_stages(self):
+        options = self.get_settings()
+        return [ options['iterations'] ] * options['epochs']
+
+
+class SleepSettings(SettingsPanel):
+    backend = BigSleep
+    group = 'Lucidrains'
+    
+    def __init__(self, frame):
+        SettingsPanel.__init__(self, frame)
+        self.options = [
+            Slider(self, 'Save every', 'save_interval', 10, 100, steps=10, default=20),
+            Slider(self, 'Image size', 'scale', 128, 1024, steps=32, default=256),
+            Slider(self, 'Epochs', 'epochs', 1, 10, steps=1, default=5),
+            Slider(self, 'Iterations', 'iterations', 100, 5000, steps=100, default=1000)
+        ]
+        self.pack_options()
+
+    def apply_options(self, model):
+        options = self.get_settings()
+        model.epochs = options['epochs']
+        model.iterations = options['iterations']
+        model.save_interval = options['save_interval']
+        model.image_size = options['scale']
 
     def get_stages(self):
         options = self.get_settings()

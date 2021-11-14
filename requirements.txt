@@ -7,3 +7,4 @@ torchaudio==0.8.2
 torch_optimizer
 -e git+https://github.com/openai/clip.git#egg=clip
 deep_daze
+big_sleep

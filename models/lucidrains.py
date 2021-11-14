@@ -5,6 +5,9 @@ from worker.thread import ThreadedWorker
 from deep_daze import Imagine as DDImagine
 from deep_daze.deep_daze import exists
 
+from big_sleep import Imagine as BSImagine
+from torchvision.utils import save_image
+
 import torch
 import torchvision.transforms as T
 from tqdm import trange, tqdm
@@ -128,3 +131,108 @@ class DeepDaze(ThreadedWorker):
             self.stop()
             return
             
+
+class BigSleepWrap(BSImagine):
+    '''
+    Using a generator instead of for loop for cleaner stopping
+    '''
+
+    def __init__(self, **kwargs):
+        BSImagine.__init__(self, **kwargs)
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def train_step(self, epoch, i, pbar=None):
+        total_loss = 0
+
+        for _ in range(self.gradient_accumulate_every):
+            out, losses = self.model(self.encoded_texts["max"], self.encoded_texts["min"])
+            loss = sum(losses) / self.gradient_accumulate_every
+            total_loss += loss
+            loss.backward()
+
+        self.optimizer.step()
+        self.model.model.latents.update()
+        self.optimizer.zero_grad()
+
+        if (i + 1) % self.save_every == 0:
+            with torch.no_grad():
+                self.model.model.latents.eval()
+                out, losses = self.model(self.encoded_texts["max"], self.encoded_texts["min"])
+                top_score, best = torch.topk(losses[2], k=1, largest=False)
+                image = self.model.model()[best].cpu()
+                self.model.model.latents.train()
+
+                save_image(image, './images/'+str(self.filename))
+                if pbar is not None:
+                    pbar.update(1)
+                else:
+                    print(f'image updated at "./images/{str(self.filename)}"')
+        return out, total_loss
+
+    def forward(self):
+        penalizing = ""
+        if len(self.text_min) > 0:
+            penalizing = f'penalizing "{self.text_min}"'
+        print(f'Imagining "{self.text_path}" {penalizing}...')
+        
+        with torch.no_grad():
+            self.model(self.encoded_texts["max"][0]) # one warmup step due to issue with CLIP and CUDA
+
+        if self.open_folder:
+            open_folder('./')
+            self.open_folder = False
+
+        image_pbar = tqdm(total=self.total_image_updates, desc='image update', position=2, leave=True)
+        for epoch in trange(self.epochs, desc = '      epochs', position=0, leave=True):
+            pbar = trange(self.iterations, desc='   iteration', position=1, leave=True)
+            image_pbar.update(0)
+            for i in pbar:
+                try:
+                    out, loss = self.train_step(epoch, i, image_pbar)
+                except RuntimeError as e:
+                    self.logger.critical(e)
+                    return
+                pbar.set_description(f'loss: {loss.item():04.2f}')
+                # Yield after a complete iteration
+                yield [epoch, i]
+
+        self.save_image(epoch, i) # one final save at end
+
+        if (self.save_gif or self.save_video) and self.save_progress:
+            self.generate_gif()
+
+
+class BigSleep(ThreadedWorker):
+    def __init__(self):
+        ThreadedWorker.__init__(self)
+
+    def set_texts(self, prompt):
+        self.text = prompt
+
+    def set_seed(self, seed):
+        pass
+
+    def set_weighted_prompts(self, weighted_prompts):
+        pass
+        
+    def function(self):
+        self.progress = [ 0 ] * self.epochs
+        model = BigSleepWrap(
+            text=self.text,
+            epochs=self.epochs,
+            iterations=self.iterations,
+            open_folder=False,
+            save_every=self.save_interval,
+            image_size=self.image_size
+        )
+        
+        try:
+            for epoch, iteration in model.forward():
+                if self.stop_signal:
+                    print('RTR')
+                    return
+                self.progress[epoch] = iteration+1
+        except Exception as e:
+            self.logger.exception(e)
+            self.stop()
+            return
